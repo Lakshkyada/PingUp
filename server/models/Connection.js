@@ -8,4 +8,4 @@ const connectionSchema = new mongoose.Schema({
 
 const Connection = mongoose.model('Connection', connectionSchema)
 
-export default connection
+export default Connection
