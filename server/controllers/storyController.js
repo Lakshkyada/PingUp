@@ -12,7 +12,9 @@ export const addUserStory = async (req, res) => {
         const {content, media_type, background_color} = req.body;
         const media = req.file
         let media_url = ''
-        
+        console.log('File:', req.file);
+        console.log('Body:', req.body);
+
         //upload media to imageKit
         if(media_type === 'image' || media_type === 'video'){
              const fileBuffer = fs.readFileSync(media.path)
@@ -51,7 +53,8 @@ export const getStories = async (req, res) => {
         const user = await User.findById(userId)
 
         // User connections and following
-        const userIds = [userId , ...user.connections, ...user.following]
+        const userIds = [userId , ...(Array.isArray(user.connections) ? user.connections : []), 
+        ...(Array.isArray(user.following) ? user.following : [])]
 
         const stories = await Story.find({
              user: {$in: userIds}

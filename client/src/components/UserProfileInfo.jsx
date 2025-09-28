@@ -40,15 +40,15 @@ const UserProfileInfo = ({user, posts, profileId, setShowEdit}) => {
               
                <div className='flex items-center gap-6 mt-6 border-t border-gray-200 pt-4'>
                    <div>
-                      <span className='sm:text-xl font-bold text-gray-900'>{posts.length}</span>
+                      <span className='sm:text-xl font-bold text-gray-900'>{posts ? posts.length :0}</span>
                       <span className='text-xs sm:text-sm text-gray-500 ml-1.5'>Posts</span>
                    </div>
                    <div>
-                      <span className='sm:text-xl font-bold text-gray-900'>{user.followers.length}</span>
+                      <span className='sm:text-xl font-bold text-gray-900'>{user.followers ? user.followers.length :0}</span>
                       <span className='text-xs sm:text-sm text-gray-500 ml-1.5'>Followers</span>
                    </div>
                    <div>
-                      <span className='sm:text-xl font-bold text-gray-900'>{user.following.length}</span>
+                      <span className='sm:text-xl font-bold text-gray-900'>{user.following?user.following.length:0}</span>
                       <span className='text-xs sm:text-sm text-gray-500 ml-1.5'>Following</span>
                    </div>
                </div>             

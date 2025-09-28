@@ -67,7 +67,7 @@ export const getFeedPosts = async (req, res) => {
 export const likePosts = async (req, res) => {
      try {
          const {userId} = req.auth()
-         const {postId} = req.auth()
+         const {postId} = req.body
 
          const post = await Post.findById(postId)
          if(post.likes_count.includes(userId)){
