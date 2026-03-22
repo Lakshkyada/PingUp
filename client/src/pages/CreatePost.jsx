@@ -3,14 +3,12 @@ import {dummyUserData} from '../assets/assets'
 import {X, Image} from 'lucide-react'
 import toast from 'react-hot-toast'
 import {useSelector} from 'react-redux'
-import { useAuth } from '@clerk/clerk-react'
 import api from '../api/axios'
 import {  useNavigate } from 'react-router-dom'
 
 const CreatePost = () => {
 
   const navigate = new useNavigate()
-  const {getToken} = useAuth()
   const [content, setContent] = useState('')
   const  [images, setImages] = useState([])
   const [loading, setLoading] = useState(false)
@@ -19,9 +17,11 @@ const CreatePost = () => {
         if(!images.length && !content){
             return toast.error('Please add at least one image or text')
         }
-        setLoading(true)
-        const postType = images.length && content ? 'text_with_image' : image.length ?
+        // 
+        setLoading(true)        
+        const postType = images.length && content ? 'text_with_image' : images.length ?
         'image' : 'text'
+
         try {
             const formData = new FormData();
             formData.append('content', content)
@@ -29,9 +29,9 @@ const CreatePost = () => {
             images.map((image)=>{
                formData.append('images', image)
             })
-            const {data} = await api.post('api/post/add', formData, 
-               {headers: { Authorization: `Bearer ${await getToken()}`}}
-            )
+            
+            const {data} = await api.post('api/post/add', formData)
+            
             if(data.success){
                navigate('/')
             } else {

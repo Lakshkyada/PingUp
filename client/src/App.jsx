@@ -1,6 +1,7 @@
-import React, { useRef } from 'react'
-import { Route, Routes, useLocation } from 'react-router-dom'
+import { useRef } from 'react'
+import { Route, Routes, useLocation, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
+import Register from './pages/Register'
 import Feed from './pages/Feed'
 import Messages from './pages/Messages'
 import ChatBox from './pages/ChatBox'
@@ -8,40 +9,45 @@ import Profile from './pages/Profile'
 import CreatePost from './pages/CreatePost'
 import Discover from './pages/Discover'
 import Connections from './pages/Connections'
-import {useUser, useAuth} from '@clerk/clerk-react'
 import Layout from './pages/Layout'
 import toast, {Toaster} from 'react-hot-toast'
 import { useEffect } from 'react'
-import { useDispatch } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 import { fetchUser } from './features/user/userSlice'
 import { fetchConnections } from './features/connections/connectionsSlice'
 import { addMessage } from './features/messages/messagesSlice'
 import Notification from './components/Notification'
+import api from './api/axios'
+
 
 const App = () => {
-  const {user} = useUser()
-  const {getToken} = useAuth()
   const dispatch = useDispatch()
   const {pathname} = useLocation()
   const pathnameRef = useRef(pathname)
+  const currentUser = useSelector((state) => state.user.value)
+  // console.log("App user:", pathnameRef.current);
   useEffect(()=>{
     const fetchData = async () => {
-     if(user){
-        const token = await getToken()
-        dispatch(fetchUser(token))
-        dispatch(fetchConnections(token))
+     try {
+       const { data } = await api.get('/api/user/data')
+       if (data.success) {
+         dispatch(fetchUser(data.user))
+         dispatch(fetchConnections())
+       }
+     } catch (error) {
+       // User not logged in
      }
     }
      fetchData()
-  },[user, getToken, dispatch])
+  },[dispatch])
 
   useEffect(()=>{
     pathnameRef.current = pathname
   }, [pathname])
 
   useEffect(()=>{
-      if(user){
-         const eventSource = new EventSource(import.meta.env.VITE_BASEURL + '/api/message/'+user.id)
+      if(currentUser){
+         const eventSource = new EventSource(import.meta.env.VITE_BASEURL + '/api/message/'+currentUser._id)
 
          eventSource.onmessage = (event)=>{
            const message = JSON.parse(event.data)
@@ -57,12 +63,14 @@ const App = () => {
             eventSource.close()
          }
       }
-  }, [user, dispatch])
+  }, [currentUser, dispatch])
   return (
     <>      
         <Toaster/> 
         <Routes>
-          <Route path='/' element={!user ? <Login/> : <Layout/>}> 
+          <Route path='/login' element={!currentUser ? <Login/> : <Navigate to="/" replace />}/>
+          <Route path='/register' element={!currentUser ? <Register/> : <Navigate to="/" replace />}/>
+          <Route path='/' element={currentUser ? <Layout/> : <Navigate to="/login" replace />}> 
             <Route index element={<Feed/>}/>   
             <Route path='messages' element={<Messages />}/> 
             <Route path='messages/:userId' element={<ChatBox/>}/>

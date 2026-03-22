@@ -1,21 +1,72 @@
-import { err } from "inngest/types";
 import fs from 'fs'
 import imagekit from "../configs/imageKit.js";
 import User from "../models/User.js";
 import { error } from "console";
 import  Connection from "../models/Connection.js";
 import Post from "../models/Post.js";
-import { inngest } from "../inngest/index.js";
+import { redisClient } from "../configs/redis.js";
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+
+const USER_CACHE_TTL = 60 * 5; // 5 minutes
+
+// Register User
+export const registerUser = async (req, res) => {
+    try {
+        const { email, password, username, full_name } = req.body;
+        const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+        if (existingUser) {
+            return res.json({ success: false, message: 'User already exists' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const user = new User({ email, password: hashedPassword, username, full_name });
+        await user.save();
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+        res.json({ success: true, message: 'User registered successfully', token });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+// Login User
+export const loginUser = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = await User.findOne({ email });
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.json({ success: false, message: 'Invalid credentials' });
+        }
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+        res.json({ success: true, message: 'Login successful', token });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+};
 
 // Get User Data using userID
 export const getUserData = async (req, res) => {
      try{
-        const {userId} = req.auth()
-        const user = await User.findById(userId)
-        if(!user){
-             return  res.json({success: false, message: "User not found"});
+        const userId = req.user.id;
+        const cacheKey = `user:${userId}`;
+        const cachedUser = await redisClient.get(cacheKey);
+
+        if (cachedUser) {
+             const user = JSON.parse(cachedUser);
+             return res.json({success: true, user, cached: true});
         }
-        res.json({success: true, user})
+
+        const user = await User.findById(userId);
+        if(!user){
+             return res.json({success: false, message: "User not found"});
+        }
+
+        await redisClient.set(cacheKey, JSON.stringify(user), {
+             EX: USER_CACHE_TTL
+        });
+
+        res.json({success: true, user, cached: false});
      } catch (error){
         console.log(error);
         res.json({success: false, message: error.message})
@@ -25,7 +76,7 @@ export const getUserData = async (req, res) => {
 // Update User Data
 export const updateUserData = async (req, res) => {
      try{
-        const {userId} = req.auth()
+        const userId = req.user.id;
         let {username, bio, location, full_name} = req.body;
         
         const tempUser = await User.findById(userId)
@@ -45,17 +96,19 @@ export const updateUserData = async (req, res) => {
               location,
               full_name,
         }
-
+        // console.log("Files received:", req.files);
         const profile = req.files.profile && req.files.profile[0]
         const cover = req.files.cover && req.files.cover[0]
-        
+        // console.log("Profile file:", profile);
+        // console.log("Cover file:", cover);
         if(profile){
              const buffer = fs.readFileSync(profile.path)
+             fs.unlinkSync(profile.path)
              const response = await imagekit.upload({
                  file: buffer,
                  fileName: profile.originalname,
              })
-
+             
              const url = imagekit.url({
                  path: response.filePath,
                  transformation: [
@@ -64,14 +117,16 @@ export const updateUserData = async (req, res) => {
                     {width: '512'}
                  ]
              })
+             // console.log("ImageKit upload url:", url);
              updateData.profile_picture = url;
         }
 
         if(cover){
              const buffer = fs.readFileSync(cover.path)
+              fs.unlinkSync(cover.path)
              const response = await imagekit.upload({
                  file: buffer,
-                 fileName: profile.originalname,
+                 fileName: cover.originalname,
              })
 
              const url = imagekit.url({
@@ -85,9 +140,14 @@ export const updateUserData = async (req, res) => {
              updateData.cover_photo = url;
         }
 
-        const user = await User.findByIdAndUpdate(userId, updateData, {new : true})
-        
-        res.json({success: true, user, message: 'Profile updated successfully'})
+        const user = await User.findByIdAndUpdate(userId, updateData, {new : true});
+
+        const cacheKey = `user:${userId}`;
+        await redisClient.set(cacheKey, JSON.stringify(user), {
+             EX: USER_CACHE_TTL
+        });
+
+        res.json({success: true, user, message: 'Profile updated successfully'});
      } catch (error){
         console.log(error);
         res.json({success: false, message: error.message})
@@ -97,9 +157,11 @@ export const updateUserData = async (req, res) => {
 // find Users using username, email, location, name
 export const discoverUsers = async (req, res) => {
      try{
-         const {userId} = req.auth()
+         const userId = req.user.id;
+         // console.log("userId:",typeof userId)
          const {input} = req.body;
-
+         // const user = await User.findById(userId)
+         // console.log("Searching users with input:", user);
          const allUsers = await User.find(
             {
                 $or: [
@@ -110,10 +172,11 @@ export const discoverUsers = async (req, res) => {
                 ]
             }
          )
+         // console.log("All users found:",typeof allUsers[0]._id);
          const filteredUsers = allUsers.filter(user => user._id !== userId);
-
          res.json({success:true, users: filteredUsers})
-
+         // res.json({success:true, users: allUsers});
+         // console.log("All users sent:", allUsers);
      } catch(error){
          console.log(error);
          res.json({success: false, message: error.message})
@@ -123,12 +186,16 @@ export const discoverUsers = async (req, res) => {
 // Follow User
 export const followUser = async (req, res) => {
      try{
-         const {userId} = req.auth()
+         const userId = req.user.id;
          const {id} = req.body;
 
-         const user = await User.findById(userId)
+         if (userId === id) {
+             return res.json({success: false, message: 'You cannot follow yourself'})
+         }
 
-         if(user.following.includes(id)){
+         const user = await User.findById(userId)
+   
+         if(user.following.map(f => f.toString()).includes(id)){
              return res.json({success: false, message: 'You are already following this user'})
          }
          
@@ -138,6 +205,10 @@ export const followUser = async (req, res) => {
          const toUser = await User.findById(id)
          toUser.followers.push(userId)
          await toUser.save()
+
+         // Invalidate cached user data to reflect follow changes immediately
+         await redisClient.del(`user:${userId}`)
+         await redisClient.del(`user:${id}`)
 
          res.json({success: true, message: 'Now you are following this user'})
      } catch(error){
@@ -149,16 +220,24 @@ export const followUser = async (req, res) => {
 // Unfollow User
 export const unfollowUser = async (req, res) => {
      try{
-         const {userId} = req.auth()
+         const userId = req.user.id;
          const {id} = req.body;
 
-         const user = await User.findById(userID)
-         user.following = user.following.filter(user => user !== id)
+         if (userId === id) {
+             return res.json({success: false, message: 'You cannot unfollow yourself'})
+         }
+
+         const user = await User.findById(userId)
+         user.following = user.following.filter(followedId => followedId.toString() !== id)
          await user.save()
 
          const toUser = await User.findById(id)
-         toUser.followers = toUser.followers.filter(user => user !== userID)
+         toUser.followers = toUser.followers.filter(followerId => followerId.toString() !== userId)
          await toUser.save()
+
+         // Invalidate cached user data to reflect unfollow changes immediately
+         await redisClient.del(`user:${userId}`)
+         await redisClient.del(`user:${id}`)
 
          res.json({success: true, message: 'Now you no longer following this user'})
      } catch(error){
@@ -170,7 +249,7 @@ export const unfollowUser = async (req, res) => {
 // Send Connection Request
 export const sendConnectionRequest = async (req, res) => {
     try{
-        const {userId} = req.auth()
+        const userId = req.user.id;
         const {id} = req.body;
 
         // check if user has sent more than 20 req in last 24 hours
@@ -211,7 +290,7 @@ export const sendConnectionRequest = async (req, res) => {
 // Get user connections
 export const getUserConnections = async (req, res) => {
     try{
-        const {userId} = req.auth()
+        const userId = req.user.id;
         const user = await User.findById(userId).populate('connections followers following')
 
         const connections = user.connections;
@@ -223,9 +302,9 @@ export const getUserConnections = async (req, res) => {
         //  console.log(pendingConnections)
 
          const pendingConnectionsDocs = await Connection.find({
-      to_user_id: user._id,
-      status: 'pending'
-    }).populate('from_user_id'); // populate sender user info
+               to_user_id: user._id,
+               status: 'pending'
+         }).populate('from_user_id'); // populate sender user info
 
     // Map to an array of sender users
     const pendingConnections = pendingConnectionsDocs.map(c => c.from_user_id);
@@ -240,10 +319,10 @@ export const getUserConnections = async (req, res) => {
 //Acept Connection Request
 export const acceptConnectionRequest = async (req, res) => {
     try{
-        const {userId} = req.auth()
+        const userId = req.user.id;
         const {id} = req.body;
-        console.log("id from body:", id)
-        console.log("logged in userId:", userId)
+        // console.log("id from body:", id)
+        // console.log("logged in userId:", userId)
         const connection = await Connection.findOne({ from_user_id: id,to_user_id: userId})
         if(!connection){
              return  res.json({ success: false, message: 'Connection not found'});
@@ -262,7 +341,6 @@ export const acceptConnectionRequest = async (req, res) => {
         
         res.json({success: true, message: 'Connection accepted successfully'})
     } catch (error){
-
          console.log(error);
          res.json({success: false, message: error.message})
     }
@@ -271,17 +349,18 @@ export const acceptConnectionRequest = async (req, res) => {
 //Get user profiles
 export const getUserProfile = async (req, res) => {
     try {
-        console.log('Incoming headers:', req.headers);
-        
+        // console.log('Incoming headers:', req.headers);       
         const {profileId} = req.body;
         const profile = await User.findById(profileId)
         if(!profile){
             return res.json({success: false, message: 'profile not found'})
         }
         const posts = await Post.find({user: profileId}).populate('user')
+        // console.log("Profile fetched:", posts);
         return res.json({success: true, profile, posts})
     } catch (error) {
         console.log(error);
         res.json({success: false, message: error.message})
     }
 }
+

@@ -1,19 +1,25 @@
 import express from 'express'
-import { protect } from '../middlewares/auth.js';
-import { acceptConnectionRequest, discoverUsers, followUser, getUserConnections, getUserData, getUserProfile, sendConnectionRequest, unfollowUser, updateUserData } from '../controllers/userController.js';
+import authMiddleware from '../middlewares/auth.js';
+import { acceptConnectionRequest, discoverUsers, followUser, getUserConnections, getUserData, getUserProfile, loginUser, registerUser, sendConnectionRequest, unfollowUser, updateUserData } from '../controllers/userController.js';
 import { upload } from '../configs/multer.js';
 import { getUserRecentMessages } from '../controllers/messageController.js';
 
 const userRouter = express.Router();
 
-userRouter.get('/data', protect, getUserData)
-userRouter.post('/update', upload.fields([{name: 'profile', maxCount: 1}, {name: 'cover', maxCount: 1}]), protect, updateUserData)
-userRouter.post('/discover', protect, discoverUsers)
-userRouter.post('/follow', protect, followUser)
-userRouter.post('/unfollow', protect, unfollowUser)
-userRouter.post('/connect', protect, sendConnectionRequest)
-userRouter.post('/accept', protect, acceptConnectionRequest)
-userRouter.get('/connections', protect, getUserConnections)
+userRouter.post('/register', registerUser)
+userRouter.post('/login', loginUser)
+userRouter.post('/logout', (req, res) => {
+    res.clearCookie('token');
+    res.json({ success: true, message: 'Logged out successfully' });
+})
+userRouter.get('/data', authMiddleware, getUserData)
+userRouter.post('/update', authMiddleware, upload.fields([{name: 'profile', maxCount: 1}, {name: 'cover', maxCount: 1}]), updateUserData)
+userRouter.post('/discover', authMiddleware, discoverUsers)
+userRouter.post('/follow', authMiddleware, followUser)
+userRouter.post('/unfollow', authMiddleware, unfollowUser)
+userRouter.post('/connect', authMiddleware, sendConnectionRequest)
+userRouter.post('/accept', authMiddleware, acceptConnectionRequest)
+userRouter.get('/connections', authMiddleware, getUserConnections)
 userRouter.post('/profiles', getUserProfile)
-userRouter.get('/recent-messages', protect, getUserRecentMessages)
+userRouter.get('/recent-messages', authMiddleware, getUserRecentMessages)
 export default userRouter

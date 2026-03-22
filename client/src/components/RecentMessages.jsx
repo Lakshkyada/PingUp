@@ -4,17 +4,13 @@ import { Link } from 'react-router-dom'
 import moment from 'moment'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
-import { useAuth, useUser } from '@clerk/clerk-react'
+import { useSelector } from 'react-redux'
 const RecentMessages = () => {
-    const {user} = useUser()
-    const {getToken} = useAuth()
+    const currentUser = useSelector((state)=>state.user.value)
     const [messages, setMessages] = useState([])
     const fetchRecentMesages = async ()=>{
          try {
-             const token = await getToken()
-             const {data} = await api.get('/api/user/recent-messages',{
-                headers: {Authorization: `Bearer ${token}`}
-             })
+             const {data} = await api.get('/api/user/recent-messages')
              if(data.success){
                  // group messages by sender and get the latest message for each sender
                  const groupedMessages = data.messages.reduce((acc, message)=>{
@@ -36,12 +32,12 @@ const RecentMessages = () => {
          }
     }
     useEffect(()=>{
-        if(user){
+        if(currentUser){
            fetchRecentMesages()
            setInterval(fetchRecentMesages, 30000)
            return ()=> {clearInterval()}
         }
-    },[user])
+    },[currentUser])
      //console.log(messages);
   return (
     <div className='space-y-2'>

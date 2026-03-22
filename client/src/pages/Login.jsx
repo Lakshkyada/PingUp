@@ -1,13 +1,38 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {assets} from '../assets/assets'
 import {CloudCog, Star} from 'lucide-react'
 import "../index.css";
-//import {SignIn , useClerk} from '@clerk/clerk-react'
-import { SignIn ,useClerk} from "@clerk/clerk-react"   // ✅ correct
+import api from '../api/axios'
+import { useNavigate, Link } from 'react-router-dom'
+import toast from 'react-hot-toast'
+import { useDispatch } from 'react-redux'
+import { fetchUser } from '../features/user/userSlice'
 
-//import 'App.css'
 const Login = () => {
-   
+  const dispatch = useDispatch()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const navigate = useNavigate()
+
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    try {
+      const { data } = await api.post('/api/user/login', { email, password })
+      if (data.success) {
+        const { data: userData } = await api.get('/api/user/data')
+        if (userData.success && userData.user) {
+          dispatch(fetchUser(userData.user))
+        }
+        toast.success('Login successful')
+        navigate('/')
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
   return (
     <div className='min-h-screen flex flex-col md:flex-row'>
        {/* bgImage */}
@@ -24,7 +49,7 @@ const Login = () => {
                    <div className='flex'>
                      {
                          Array(5).fill(0).map((_,i)=>(
-                             <Star key={i} className='size-4 md:size-4.5 text-transparent fill -amber-500'/>
+                             <Star key={i} className='size-4 md:size-4.5 fill-amber-500 text-amber-500'/>
                          ))
                      }
                     </div>
@@ -40,7 +65,21 @@ const Login = () => {
        </div>
        {/* right-side */}
        <div className='flex-1 flex items-center justify-center p-6 sm:p-10'>
-            <SignIn />
+            <form onSubmit={handleLogin} className='bg-white p-8 rounded-lg shadow-md w-full max-w-md'>
+              <h2 className='text-2xl font-bold mb-6 text-center'>Login</h2>
+              <div className='mb-4'>
+                <label className='block text-gray-700'>Email</label>
+                <input type='email' value={email} onChange={(e) => setEmail(e.target.value)} className='w-full p-2 border border-gray-300 rounded' required />
+              </div>
+              <div className='mb-4'>
+                <label className='block text-gray-700'>Password</label>
+                <input type='password' value={password} onChange={(e) => setPassword(e.target.value)} className='w-full p-2 border border-gray-300 rounded' required />
+              </div>
+              <button type='submit' className='w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600'>Login</button>
+              <p className='text-center mt-4 text-gray-600'>
+                Don't have an account? <Link to='/register' className='text-blue-500 hover:underline'>Sign up</Link>
+              </p>
+            </form>
        </div>
     </div>
   )

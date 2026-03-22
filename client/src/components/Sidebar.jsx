@@ -3,12 +3,23 @@ import React from 'react'
 import { assets, dummyUserData } from '../assets/assets'
 import { useNavigate , Link } from 'react-router-dom'
 import MenuItems from './MenuItems'
-import {UserButton , useClerk} from '@clerk/clerk-react'
-import {useSelector} from 'react-redux'
+import {useSelector, useDispatch} from 'react-redux'
+import api from '../api/axios'
+import toast from 'react-hot-toast'
+import { setUser } from '../features/user/userSlice'
 const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
     const navigate = useNavigate()
     const user = useSelector((state)=>state.user.value)
-    const {signOut} = useClerk()
+    const dispatch = useDispatch()
+    const handleLogout = async () => {
+        try {
+            await api.post('/api/user/logout')
+            dispatch(setUser(null))
+            navigate('/login')
+        } catch (error) {
+            toast.error('Logout failed')
+        }
+    }
   return (    
     <div className={`w-60 xl:w-72 bg-white border-r border-gray-200 flex flex-col justify-between
     items-center max-sm:absolute top-0 bottom-0 z-20 ${
@@ -27,13 +38,13 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
         </div>
         <div className='w-full border-t border-gray-200 p-4 px-7 flex items-center justify-between'>
            <div className='flex gap-2 items-center cursor-pointer'>
-                <UserButton />
+                <img src={user.profile_picture || assets.default_profile} alt="" className='w-8 h-8 rounded-full' />
                 <div>
                     <h1 className='text-sm font-medium'>{user.full_name}</h1>
                     <p className=''>@{user.username}</p>
                 </div>
            </div>
-           <LogOut className='w-4.5 text-gray-400 hover:text-gray-700 transition cursor-pointer' onClick={signOut}/>
+           <LogOut className='w-4.5 text-gray-400 hover:text-gray-700 transition cursor-pointer' onClick={handleLogout}/>
         </div>
     </div>
   )

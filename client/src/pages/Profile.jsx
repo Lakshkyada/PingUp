@@ -8,12 +8,10 @@ import Loading from '../components/Loading'
 import ProfileModal from '../components/ProfileModal'
 import { useSelector } from 'react-redux'
 import {toast} from 'react-hot-toast'
-import {useAuth} from '@clerk/clerk-react'
 import api from '../api/axios'
 const Profile = () => {
 
   const currentUser = useSelector((state)=> state.user.value)
-  const {getToken} = useAuth()
   const {profileId} = useParams()
   const [user, setUser] = useState(null)
   const [posts, setPosts] = useState([])
@@ -21,14 +19,9 @@ const Profile = () => {
   const [showEdit, setShowEdit] = useState(false)
 
   const fetchUser = async (profileId) => {
-     const token = await getToken()
-      
      try {
 
-         const {data} = await api.post('/api/user/profiles', {profileId},{
-            headers: {'Content-Type': 'application/json',Authorization: `Bearer ${token}`}
-         })
-          console.log(2)
+         const {data} = await api.post('/api/user/profiles', {profileId})
          if(data.success){
             setUser(data.profile)
             setPosts(data.posts)

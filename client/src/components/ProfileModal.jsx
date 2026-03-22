@@ -2,13 +2,11 @@ import React, { useState } from 'react'
 import { dummyUserData } from '../assets/assets'
 import {Pencil, Users} from 'lucide-react'
 import {useDispatch, useSelector} from 'react-redux'
-import {useAuth} from '@clerk/clerk-react'
 import { updateUser } from '../features/user/userSlice'
 import toast from 'react-hot-toast'
 const ProfileModal = ({setShowEdit}) => {
 
     const user = useSelector((state)=>state.user.value)
-    const {getToken} = useAuth()
     const dispatch = useDispatch()
     const [editForm, setEditForm] = useState({
          username: user.username,
@@ -21,17 +19,19 @@ const ProfileModal = ({setShowEdit}) => {
     const handleSaveProfile = async (e) => {
          e.preventDefault();
          try {
+            // console.log('edit form data:', editForm)
             const userData = new FormData();
             const {full_name, username, bio, location, profile_picture, cover_photo} = editForm
             userData.append('username', username)
             userData.append('bio', bio)
             userData.append('location', location)
             userData.append('full_name', full_name)
+            // console.log('profile picture:', profile_picture)
+            profile_picture && console.log(profile_picture)
             profile_picture && userData.append('profile', profile_picture)
             cover_photo && userData.append('cover', cover_photo)
 
-            const token = await getToken()
-            dispatch(updateUser({userData,token}))
+            dispatch(updateUser(userData))
             setShowEdit(false)
          } catch (error) {
             toast.error(error.message)

@@ -3,7 +3,6 @@ import { dummyConnectionsData } from '../assets/assets'
 import {Search} from 'lucide-react'
 import UserCard from '../components/UserCard'
 import Loading from '../components/Loading'
-import { useAuth } from '@clerk/clerk-react'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
 import { useDispatch } from 'react-redux'
@@ -13,7 +12,6 @@ const Discover = () => {
      const [input, setInput] = useState('')
      const [users, setUsers] = useState([])
      const [loading, setLoading] = useState(false)
-     const { getToken } = useAuth()
      const dispatch = useDispatch()
      const handleSearch = async (e) => {
         if(e.key === 'Enter'){
@@ -21,9 +19,7 @@ const Discover = () => {
                setUsers([])
                setLoading(true)
                // console.log(getToken());
-               const {data} = await api.post('/api/user/discover', {input},{                  
-                   headers: {Authorization: `Bearer ${await getToken()}`}
-               })
+               const {data} = await api.post('/api/user/discover', {input})
                data.success ? setUsers(data.users) : toast.error(data.message)
                setLoading(false)
                setInput('')
@@ -33,11 +29,6 @@ const Discover = () => {
             setLoading(false)
         }
      }
-     useEffect(()=>{
-        getToken().then((token)=>{
-           dispatch(fetchUser(token))
-        })
-     })
   return (
     <div key={users._id} className='min-h-screen bg-gradient-to-b from-slate-50 to-white'>
         <div className='max-w-6xl mx-auto p-6'>

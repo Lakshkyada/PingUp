@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import {ArrowLeft, TextIcon, Upload, Sparkle} from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useAuth } from '@clerk/clerk-react'
 import api from '../api/axios'
 const StoryModal = ({setShowModal, fetchStories}) => {
 
@@ -11,7 +10,6 @@ const StoryModal = ({setShowModal, fetchStories}) => {
      const [text, setText] = useState('')
      const [media, setMedia] = useState(null)
      const [previewUrl, setPreviewUrl] = useState(null)
-     const {getToken} = useAuth()
 
      const MAX_VIDEO_DURATION = 60;
      const MAX_VIDEO_SIZE_MB = 50;
@@ -63,11 +61,8 @@ const StoryModal = ({setShowModal, fetchStories}) => {
           formData.append('media', media)
           formData.append('background_color', background)
           
-          const token = await getToken();
-          try { 
-              const {data} = await api.post('/api/story/create', formData,{
-                 headers: {Authorization: `Bearer ${token}`}
-              })
+          try {
+              const {data} = await api.post('/api/story/create', formData)
               if(data.success){
                  setShowModal(false)
                  toast.success('Story created successfully')

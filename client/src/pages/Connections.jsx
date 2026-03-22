@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react'
 import {Users, UserPlus, UserCheck, UserRoundPen, MessageSquare} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
-import { useAuth } from '@clerk/clerk-react'
 import { fetchConnections } from '../features/connections/connectionsSlice'
+import { fetchUser } from '../features/user/userSlice'
 import toast from 'react-hot-toast'
 import api from '../api/axios'
 const Connections = () => {
@@ -12,22 +12,31 @@ const Connections = () => {
   const dispatch = useDispatch()
   const {connections, pendingConnections, followers, following} = useSelector
   ((state)=>state.connections)
-  const {getToken} = useAuth()
   const dataArray = [
       {label: 'Followers', value: followers, icon:Users},
       {label: 'Following', value: following, icon:UserCheck},
       {label: 'Pending', value: pendingConnections, icon:UserRoundPen},
       {label: 'Connections', value: connections, icon:UserPlus},
   ]
-  console.log('connec',dataArray)
+  // console.log('connec',dataArray)
+  const syncUserState = async () => {
+      try {
+          const {data} = await api.get('/api/user/data')
+          if (data.success) {
+              dispatch(fetchUser(data.user))
+          }
+      } catch (error) {
+          console.error('Failed to sync user state:', error)
+      }
+  }
+
   const handleUnfollow = async (userId) => {
      try {
-         const {data} = await api.post('/api/user/unfollow', {id:userId}, {
-             headers: {Authorization: `Bearer ${await getToken()}`}
-         })
+         const {data} = await api.post('/api/user/unfollow', {id:userId})
          if(data.success){
              toast.success(data.message)
-             dispatch(fetchConnections(await getToken()))
+             await syncUserState()
+             dispatch(fetchConnections())
          } else {
             toast(data.message)
          }
@@ -37,13 +46,11 @@ const Connections = () => {
   }
   const acceptConnection = async (userId) => {
      try {
-         const {data} = await api.post('/api/user/accept', {id:userId}, {
-             headers: {Authorization: `Bearer ${await getToken()}`}
-         })
-         console.log(data);
+         const {data} = await api.post('/api/user/accept', {id:userId})
+         // console.log(data);
          if(data.success){
              toast.success(data.message)
-             dispatch(fetchConnections(await getToken()))
+             dispatch(fetchConnections())
          } else {
             toast(data.message)
          }
@@ -52,9 +59,7 @@ const Connections = () => {
      }
   }
   useEffect(()=>{
-     getToken().then((token)=>{
-        dispatch(fetchConnections(token))
-     })
+     dispatch(fetchConnections())
   },[])
   return (
     <div className='min-h-screen bg-slate-50'>
