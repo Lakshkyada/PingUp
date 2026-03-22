@@ -10,8 +10,7 @@ const Connections = () => {
   const navigate = useNavigate()
   const [currentTab, setCurrentTab] = useState('Followers')
   const dispatch = useDispatch()
-  const {connections, pendingConnections, followers, following} = useSelector
-  ((state)=>state.connections)
+   const {connections, pendingConnections, followers, following} = useSelector((state)=>state.connections)
   const dataArray = [
       {label: 'Followers', value: followers, icon:Users},
       {label: 'Following', value: following, icon:UserCheck},
@@ -60,7 +59,7 @@ const Connections = () => {
   }
   useEffect(()=>{
      dispatch(fetchConnections())
-  },[])
+  },[dispatch])
   return (
     <div className='min-h-screen bg-slate-50'>
         <div className='max-w-6xl mx-auto p-6'>
@@ -128,9 +127,16 @@ const Connections = () => {
                                   )
                                }
                                {
-                                  currentTab === 'Pending' && (
+                                  currentTab === 'Pending' && user.requestType !== 'outgoing' && (
                                     <button onClick={()=>acceptConnection(user._id)} className='w-full p-2 text-sm rounded bg-slate-100 hover:bg-slate-200 text-black active:scale-95 transition cursor-pointer'>
                                         Accept
+                                    </button>
+                                  )
+                               }
+                               {
+                                  currentTab === 'Pending' && user.requestType === 'outgoing' && (
+                                    <button disabled className='w-full p-2 text-sm rounded bg-slate-100 text-slate-500 cursor-not-allowed'>
+                                        Requested
                                     </button>
                                   )
                                }

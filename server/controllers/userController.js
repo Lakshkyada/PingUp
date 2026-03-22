@@ -297,19 +297,37 @@ export const getUserConnections = async (req, res) => {
         const followers = user.followers;
         const following = user.following;
 
-        // const pendingConnections = (await Connection.find({to_user_id: userId, status: 'pending'})
-        // .populate('from_user_id')).map(connection=>connection.from_user_id)
-        //  console.log(pendingConnections)
+        const incomingPendingDocs = await Connection.find({
+            to_user_id: userId,
+            status: 'pending'
+        });
 
-         const pendingConnectionsDocs = await Connection.find({
-               to_user_id: user._id,
-               status: 'pending'
-         }).populate('from_user_id'); // populate sender user info
+        const outgoingPendingDocs = await Connection.find({
+            from_user_id: userId,
+            status: 'pending'
+        });
 
-    // Map to an array of sender users
-    const pendingConnections = pendingConnectionsDocs.map(c => c.from_user_id);
-        //console.log(pendingConnections)
-         res.json({success: true, connections, followers, following, pendingConnections});
+        const incomingUserIds = incomingPendingDocs.map((connection) => connection.from_user_id);
+        const outgoingUserIds = outgoingPendingDocs.map((connection) => connection.to_user_id);
+
+        const [incomingUsers, outgoingUsers] = await Promise.all([
+            User.find({ _id: { $in: incomingUserIds } }),
+            User.find({ _id: { $in: outgoingUserIds } })
+        ]);
+
+        const incomingPending = incomingUsers.map((pendingUser) => ({
+            ...pendingUser.toObject(),
+            requestType: 'incoming',
+        }));
+
+        const outgoingPending = outgoingUsers.map((pendingUser) => ({
+            ...pendingUser.toObject(),
+            requestType: 'outgoing',
+        }));
+
+        const pendingConnections = [...incomingPending, ...outgoingPending];
+
+        res.json({success: true, connections, followers, following, pendingConnections});
     } catch (error){
          console.log(error);
          res.json({success: false, message: error.message})
