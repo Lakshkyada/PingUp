@@ -4,6 +4,7 @@ import {Pencil, Users} from 'lucide-react'
 import {useDispatch, useSelector} from 'react-redux'
 import { updateUser } from '../features/user/userSlice'
 import toast from 'react-hot-toast'
+import { uploadFileToImageKit } from '../utils/imagekitUpload'
 const ProfileModal = ({setShowEdit}) => {
 
     const user = useSelector((state)=>state.user.value)
@@ -19,19 +20,35 @@ const ProfileModal = ({setShowEdit}) => {
     const handleSaveProfile = async (e) => {
          e.preventDefault();
          try {
-            // console.log('edit form data:', editForm)
-            const userData = new FormData();
-            const {full_name, username, bio, location, profile_picture, cover_photo} = editForm
-            userData.append('username', username)
-            userData.append('bio', bio)
-            userData.append('location', location)
-            userData.append('full_name', full_name)
-            // console.log('profile picture:', profile_picture)
-            profile_picture && console.log(profile_picture)
-            profile_picture && userData.append('profile', profile_picture)
-            cover_photo && userData.append('cover', cover_photo)
+            let profile_url = ''
+            let cover_url = ''
 
-            dispatch(updateUser(userData))
+            const {full_name, username, bio, location, profile_picture, cover_photo} = editForm
+
+            if (profile_picture) {
+                const uploadedProfile = await uploadFileToImageKit({
+                    file: profile_picture,
+                    folder: '/users/profile',
+                })
+                profile_url = uploadedProfile.url
+            }
+
+            if (cover_photo) {
+                const uploadedCover = await uploadFileToImageKit({
+                    file: cover_photo,
+                    folder: '/users/cover',
+                })
+                cover_url = uploadedCover.url
+            }
+
+            dispatch(updateUser({
+                username,
+                bio,
+                location,
+                full_name,
+                profile_url,
+                cover_url,
+            }))
             setShowEdit(false)
          } catch (error) {
             toast.error(error.message)

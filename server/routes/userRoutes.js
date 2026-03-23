@@ -1,7 +1,6 @@
 import express from 'express'
 import authMiddleware from '../middlewares/auth.js';
 import { acceptConnectionRequest, discoverUsers, followUser, getUserConnections, getUserData, getUserProfile, loginUser, registerUser, sendConnectionRequest, unfollowUser, updateUserData } from '../controllers/userController.js';
-import { upload } from '../configs/multer.js';
 import { getUserRecentMessages } from '../controllers/messageController.js';
 
 const userRouter = express.Router();
@@ -13,7 +12,7 @@ userRouter.post('/logout', (req, res) => {
     res.json({ success: true, message: 'Logged out successfully' });
 })
 userRouter.get('/data', authMiddleware, getUserData)
-userRouter.post('/update', authMiddleware, upload.fields([{name: 'profile', maxCount: 1}, {name: 'cover', maxCount: 1}]), updateUserData)
+userRouter.post('/update', authMiddleware, updateUserData)
 userRouter.post('/discover', authMiddleware, discoverUsers)
 userRouter.post('/follow', authMiddleware, followUser)
 userRouter.post('/unfollow', authMiddleware, unfollowUser)

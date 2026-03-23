@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import {ArrowLeft, TextIcon, Upload, Sparkle} from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '../api/axios'
+import { uploadFileToImageKit } from '../utils/imagekitUpload'
 const StoryModal = ({setShowModal, fetchStories}) => {
 
      const bgColors = ['#4f46e5', '#7c3aed', '#db2777', '#e11d48', '#ca8a04', '#0d9488']
@@ -55,14 +56,24 @@ const StoryModal = ({setShowModal, fetchStories}) => {
               throw new Error('plase enter some text')
           }
 
-          let formData = new FormData();
-          formData.append('content', text)
-          formData.append('media_type', media_type)
-          formData.append('media', media)
-          formData.append('background_color', background)
+          let media_url = ''
+
+          if (mode === 'media' && media) {
+              const uploaded = await uploadFileToImageKit({
+                  file: media,
+                  folder: '/stories',
+              })
+
+              media_url = uploaded.url
+          }
           
           try {
-              const {data} = await api.post('/api/story/create', formData)
+              const {data} = await api.post('/api/story/create', {
+                  content: text,
+                  media_type,
+                  media_url,
+                  background_color: background,
+              })
               if(data.success){
                  setShowModal(false)
                  toast.success('Story created successfully')

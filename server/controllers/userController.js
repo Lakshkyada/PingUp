@@ -1,5 +1,3 @@
-import fs from 'fs'
-import imagekit from "../configs/imageKit.js";
 import User from "../models/User.js";
 import { error } from "console";
 import  Connection from "../models/Connection.js";
@@ -7,8 +5,44 @@ import Post from "../models/Post.js";
 import { redisClient } from "../configs/redis.js";
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { inngest } from "../inngest/index.js";
+import imagekit from "../configs/imageKit.js";
 
 const USER_CACHE_TTL = 60 * 5; // 5 minutes
+
+const getImageKitPathFromUrl = (inputUrl) => {
+    try {
+        const parsed = new URL(inputUrl);
+        let normalizedPath = parsed.pathname;
+
+        // Remove urlEndpoint pathname prefix if present (for example: /your_imagekit_id)
+        // so ImageKit gets only the file path segment.
+        if (process.env.IMAGEKIT_URL_ENDPOINT) {
+            const endpointPath = new URL(process.env.IMAGEKIT_URL_ENDPOINT).pathname;
+            if (endpointPath && normalizedPath.startsWith(endpointPath)) {
+                normalizedPath = normalizedPath.slice(endpointPath.length);
+            }
+        }
+
+        return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+    } catch {
+        return '';
+    }
+};
+
+const getTransformedImageUrl = (inputUrl, width = '512') => {
+    const path = getImageKitPathFromUrl(inputUrl);
+    if (!path) return inputUrl;
+
+    return imagekit.url({
+        path,
+        transformation: [
+            { quality: 'auto' },
+            { format: 'webp' },
+            { width }
+        ]
+    });
+};
 
 // Register User
 export const registerUser = async (req, res) => {
@@ -21,6 +55,7 @@ export const registerUser = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const user = new User({ email, password: hashedPassword, username, full_name });
         await user.save();
+        
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
         res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
         res.json({ success: true, message: 'User registered successfully', token });
@@ -77,7 +112,7 @@ export const getUserData = async (req, res) => {
 export const updateUserData = async (req, res) => {
      try{
         const userId = req.user.id;
-        let {username, bio, location, full_name} = req.body;
+    let {username, bio, location, full_name, profile_url, cover_url} = req.body;
         
         const tempUser = await User.findById(userId)
 
@@ -96,49 +131,14 @@ export const updateUserData = async (req, res) => {
               location,
               full_name,
         }
-        // console.log("Files received:", req.files);
-        const profile = req.files.profile && req.files.profile[0]
-        const cover = req.files.cover && req.files.cover[0]
-        // console.log("Profile file:", profile);
-        // console.log("Cover file:", cover);
-        if(profile){
-             const buffer = fs.readFileSync(profile.path)
-             fs.unlinkSync(profile.path)
-             const response = await imagekit.upload({
-                 file: buffer,
-                 fileName: profile.originalname,
-             })
-             
-             const url = imagekit.url({
-                 path: response.filePath,
-                 transformation: [
-                    {quality: 'auto'},
-                    {format: 'webp'},
-                    {width: '512'}
-                 ]
-             })
-             // console.log("ImageKit upload url:", url);
-             updateData.profile_picture = url;
-        }
+        
+           if(profile_url){
+               updateData.profile_picture = getTransformedImageUrl(profile_url);
+           }
 
-        if(cover){
-             const buffer = fs.readFileSync(cover.path)
-              fs.unlinkSync(cover.path)
-             const response = await imagekit.upload({
-                 file: buffer,
-                 fileName: cover.originalname,
-             })
-
-             const url = imagekit.url({
-                 path: response.filePath,
-                 transformation: [
-                    {quality: 'auto'},
-                    {format: 'webp'},
-                    {width: '1280'}
-                 ]
-             })
-             updateData.cover_photo = url;
-        }
+           if(cover_url){
+               updateData.cover_photo = getTransformedImageUrl(cover_url, '1280');
+           }
 
         const user = await User.findByIdAndUpdate(userId, updateData, {new : true});
 
@@ -173,7 +173,7 @@ export const discoverUsers = async (req, res) => {
             }
          )
          // console.log("All users found:",typeof allUsers[0]._id);
-         const filteredUsers = allUsers.filter(user => user._id !== userId);
+         const filteredUsers = allUsers.filter(user => user._id.toString() !== userId);
          res.json({success:true, users: filteredUsers})
          // res.json({success:true, users: allUsers});
          // console.log("All users sent:", allUsers);

@@ -1,47 +1,71 @@
-import fs from 'fs'
-import imagekit from '../configs/imageKit.js';
 import Post from '../models/Post.js';
 import User from '../models/User.js';
+import imagekit from '../configs/imageKit.js';
+
+const getImageKitPathFromUrl = (inputUrl) => {
+  try {
+    const parsed = new URL(inputUrl);
+    let normalizedPath = parsed.pathname;
+
+    // Remove urlEndpoint pathname prefix if present (for example: /your_imagekit_id)
+    // so ImageKit gets only the file path segment.
+    if (process.env.IMAGEKIT_URL_ENDPOINT) {
+      const endpointPath = new URL(process.env.IMAGEKIT_URL_ENDPOINT).pathname;
+      if (endpointPath && normalizedPath.startsWith(endpointPath)) {
+        normalizedPath = normalizedPath.slice(endpointPath.length);
+      }
+    }
+
+    return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+  } catch {
+    return '';
+  }
+};
+
+const getTransformedImageUrl = (inputUrl) => {
+  const path = getImageKitPathFromUrl(inputUrl);
+  if (!path) return inputUrl;
+
+  return imagekit.url({
+    path,
+    transformation: [
+      { quality: 'auto' },
+      { format: 'webp' },
+      { width: '512' },
+    ],
+  });
+};
 
 //Add Post
 export const addPost = async (req, res) => {
-  const images = req.files || []
-  const tempPaths = images.map(img => img.path)
-
   try {
     const userId = req.user.id;
     const { content, post_type } = req.body
+    let { image_urls } = req.body
 
-    let image_urls = []
+    let uploadedImageUrls = []
 
-    if (images.length) {
-      image_urls = await Promise.all(
-        images.map(async (image) => {
-          const fileStream = fs.createReadStream(image.path)
-          const response = await imagekit.upload({
-            file: fileStream,
-            fileName: image.originalname,
-            folder: "posts"
-          })
-
-          const url = imagekit.url({
-            path: response.filePath,
-            transformation: [
-              { quality: "auto" },
-              { format: "webp" },
-              { width: "512" }
-            ]
-          })
-
-          return url
-        })
-      )
+    if (image_urls) {
+      if (typeof image_urls === 'string') {
+        try {
+          const parsed = JSON.parse(image_urls)
+          uploadedImageUrls = Array.isArray(parsed) ? parsed : [image_urls]
+        } catch {
+          uploadedImageUrls = [image_urls]
+        }
+      } else if (Array.isArray(image_urls)) {
+        uploadedImageUrls = image_urls
+      }
     }
+
+    const transformedImageUrls = uploadedImageUrls.map((url) =>
+      getTransformedImageUrl(url)
+    );
 
     await Post.create({
       user: userId,
       content,
-      image_urls,
+      image_urls: transformedImageUrls,
       post_type
     })
 
@@ -56,15 +80,6 @@ export const addPost = async (req, res) => {
       success: false,
       message: error.message
     })
-  } finally {
-
-    // remove all temp files
-    await Promise.all(
-      tempPaths.map(path =>
-        fs.promises.unlink(path).catch(() => {})
-      )
-    )
-
   }
 }
 

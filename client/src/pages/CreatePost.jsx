@@ -1,14 +1,14 @@
 import React, { useState } from 'react'
-import {dummyUserData} from '../assets/assets'
 import {X, Image} from 'lucide-react'
 import toast from 'react-hot-toast'
 import {useSelector} from 'react-redux'
 import api from '../api/axios'
+import { uploadFileToImageKit } from '../utils/imagekitUpload'
 import {  useNavigate } from 'react-router-dom'
 
 const CreatePost = () => {
 
-  const navigate = new useNavigate()
+   const navigate = useNavigate()
   const [content, setContent] = useState('')
   const  [images, setImages] = useState([])
   const [loading, setLoading] = useState(false)
@@ -22,15 +22,27 @@ const CreatePost = () => {
         const postType = images.length && content ? 'text_with_image' : images.length ?
         'image' : 'text'
 
-        try {
-            const formData = new FormData();
-            formData.append('content', content)
-            formData.append('post_type', postType)
-            images.map((image)=>{
-               formData.append('images', image)
-            })
-            
-            const {data} = await api.post('api/post/add', formData)
+      try {
+         let image_urls = []
+
+         if (images.length) {
+            image_urls = await Promise.all(
+               images.map(async (image) => {
+                  const uploaded = await uploadFileToImageKit({
+                     file: image,
+                     folder: '/posts',
+                  })
+
+                  return uploaded.url
+               })
+            )
+         }
+
+         const {data} = await api.post('api/post/add', {
+            content,
+            post_type: postType,
+            image_urls,
+         })
             
             if(data.success){
                navigate('/')

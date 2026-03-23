@@ -1,7 +1,4 @@
-import fs from 'fs'
-import imagekit from '../configs/imageKit.js';
 import Message from '../models/Message.js';
-import { create } from 'domain';
 
 // SS = server side
 // create an empty object to store SS Event connections
@@ -36,27 +33,17 @@ export const sseController = (req, res) => {
 export const sendMessage = async (req, res) => {
     try {
         const userId = req.user.id;
-        const {to_user_id, text} = req.body
-        const image = req.file
-
-        let media_url = ''
-        let message_type = image ? 'image' : 'text'
-        if (!text && !image) {
-            return res.json({ success: false, message: "Message cannot be empty" });
+        const {to_user_id, text, media_url: incomingMediaUrl} = req.body
+        if (!to_user_id) {
+            return res.status(400).json({
+                success: false,
+                message: "Receiver ID is required"
+            });
         }
-        if(message_type === 'image'){
-             const response = await imagekit.upload({
-                 file: fs.createReadStream(image.path),
-                 fileName: image.originalname,
-             })
-             media_url = imagekit.url({
-                 path: response.filePath,
-                 transformation: [
-                    {quality: 'auto'},
-                    {format: 'webp'},
-                    {width: '1280'}
-                 ]
-             })
+        let media_url = incomingMediaUrl || ''
+        let message_type = media_url ? 'image' : 'text'
+        if (!text && !media_url) {
+            return res.json({ success: false, message: "Message cannot be empty" });
         }
         
         const message = await Message.create({
@@ -88,8 +75,15 @@ export const sendMessage = async (req, res) => {
 export const getChatMessages = async (req, res) => {
     try {
         const userId = req.user.id;
-        const {to_user_id} = req.body;
-
+        // console.log('User ID:', userId);
+        let {to_user_id} = req.body;
+        console.log('To User ID:', to_user_id);
+        
+        // Handle case where to_user_id is passed as an object
+        if (typeof to_user_id === 'object' && to_user_id !== null && to_user_id.userId) {
+            to_user_id = to_user_id.userId;
+        }
+        
         const messages = await Message.find({
             $or: [
                 {from_user_id: userId, to_user_id},

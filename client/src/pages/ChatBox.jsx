@@ -4,6 +4,7 @@ import { ImageIcon, SendHorizonal } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useParams } from 'react-router-dom'
 import api from '../api/axios'
+import { uploadFileToImageKit } from '../utils/imagekitUpload'
 import { addMessage, fetchMessages, resetMessages } from '../features/messages/messagesSlice.js'
 import toast from 'react-hot-toast'
  
@@ -20,7 +21,7 @@ const ChatBox = () => {
 
   const fetchUserMessages = async () => {
         try {
-            dispatch(fetchMessages({userId}))
+            dispatch(fetchMessages(userId))
         } catch (error) {
             toast.error(error.message)
         }
@@ -28,12 +29,22 @@ const ChatBox = () => {
   const sendMessage = async () => {
         try {
             if(!text && !image) return 
-            const formData = new FormData()
-            formData.append('to_user_id', userId)
-            formData.append('text', text)
-            image && formData.append('image', image)
+         let media_url = ''
 
-            const {data} = await api.post('/api/message/send', formData)
+         if (image) {
+            const uploaded = await uploadFileToImageKit({
+               file: image,
+               folder: '/messages',
+            })
+
+            media_url = uploaded.url
+         }
+
+         const {data} = await api.post('/api/message/send', {
+            to_user_id: userId,
+            text,
+            media_url,
+         })
             if(data.success){
                 setText('')
                 setImage(null)
