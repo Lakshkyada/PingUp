@@ -17,8 +17,12 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault()
     try {
-      const { data } = await api.post('/api/user/login', { email, password })
+      const { data } = await api.post('/api/auth/login', { email, password })
       if (data.success) {
+        // Store token in localStorage so axios interceptor can use it
+        if (data.token) {
+          localStorage.setItem('token', data.token)
+        }
         const { data: userData } = await api.get('/api/user/data')
         if (userData.success && userData.user) {
           dispatch(fetchUser(userData.user))

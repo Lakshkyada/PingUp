@@ -13,7 +13,8 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
     const dispatch = useDispatch()
     const handleLogout = async () => {
         try {
-            await api.post('/api/user/logout')
+            await api.post('/api/auth/logout')
+            localStorage.removeItem('token')
             dispatch(setUser(null))
             navigate('/login')
         } catch (error) {

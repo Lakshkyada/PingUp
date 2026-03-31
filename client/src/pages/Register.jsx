@@ -23,7 +23,7 @@ const Register = () => {
       return
     }
     try {
-      const { data } = await api.post('/api/user/register', { email, password, full_name, username })
+      const { data } = await api.post('/api/auth/register', { email, password, full_name, username })
       if (data.success) {
         const { data: userData } = await api.get('/api/user/data')
         if (userData.success && userData.user) {

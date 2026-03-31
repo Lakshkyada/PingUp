@@ -26,19 +26,31 @@ const ProfileModal = ({setShowEdit}) => {
             const {full_name, username, bio, location, profile_picture, cover_photo} = editForm
 
             if (profile_picture) {
-                const uploadedProfile = await uploadFileToImageKit({
-                    file: profile_picture,
-                    folder: '/users/profile',
-                })
-                profile_url = uploadedProfile.url
+                try {
+                    const uploadedProfile = await uploadFileToImageKit({
+                        file: profile_picture,
+                        folder: '/users/profile',
+                    })
+                    profile_url = uploadedProfile.url
+                } catch (uploadError) {
+                    const errorMsg = uploadError.message || 'Profile picture upload failed'
+                    console.error('Profile upload error:', errorMsg)
+                    throw new Error(`Profile picture: ${errorMsg}`)
+                }
             }
 
             if (cover_photo) {
-                const uploadedCover = await uploadFileToImageKit({
-                    file: cover_photo,
-                    folder: '/users/cover',
-                })
-                cover_url = uploadedCover.url
+                try {
+                    const uploadedCover = await uploadFileToImageKit({
+                        file: cover_photo,
+                        folder: '/users/cover',
+                    })
+                    cover_url = uploadedCover.url
+                } catch (uploadError) {
+                    const errorMsg = uploadError.message || 'Cover photo upload failed'
+                    console.error('Cover upload error:', errorMsg)
+                    throw new Error(`Cover photo: ${errorMsg}`)
+                }
             }
 
             dispatch(updateUser({
@@ -50,8 +62,10 @@ const ProfileModal = ({setShowEdit}) => {
                 cover_url,
             }))
             setShowEdit(false)
+            toast.success('Profile updated successfully!')
          } catch (error) {
-            toast.error(error.message)
+            console.error('Profile save error:', error.message)
+            toast.error(error.message || 'Failed to save profile. Please try again.')
          }
     }
   return (

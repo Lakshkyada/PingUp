@@ -4,38 +4,46 @@ import { Link } from 'react-router-dom'
 import moment from 'moment'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
-import { useSelector } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
+import { setUser } from '../features/user/userSlice'
 const RecentMessages = () => {
+    const dispatch = useDispatch()
     const currentUser = useSelector((state)=>state.user.value)
     const [messages, setMessages] = useState([])
-    const fetchRecentMesages = async ()=>{
+    const fetchRecentMessages = async ()=>{
          try {
              const {data} = await api.get('/api/user/recent-messages')
              if(data.success){
-                 // group messages by sender and get the latest message for each sender
-                 const groupedMessages = data.messages.reduce((acc, message)=>{
-                     const senderId = message.from_user_id._id;
-                     if(!acc[senderId] || new Date(message.createdAt)>new Date(acc[senderId].createdAt)){
-                        acc[senderId] = message
-                     }
-                     return acc;
-                 }, {})
-
-                 // Sort messages by date
-                 const sortedMessages = Object.values(groupedMessages).sort((a,b)=> new Date(b.createdAt)- new Date(a.createdAt)) 
+                     // conversations are already grouped latest message for each user
+                     const conversations = data.conversations || [];
+                 
+                     // Ensure it's an array and sort by date
+                     const sortedMessages = Array.isArray(conversations) 
+                         ? conversations.sort((a,b)=> new Date(b.createdAt)- new Date(a.createdAt))
+                         : [];
+                 
                  setMessages(sortedMessages)
              } else {
                 toast.error(data.message)
              }
          } catch (error) {
-                 toast.error(error.message)
+                 if (error?.response?.status === 401) {
+                     setMessages([])
+                     dispatch(setUser(null))
+                     return
+                 }
+                 if (error?.response?.status !== 401) {
+                     toast.error(error.message)
+                 }
          }
     }
     useEffect(()=>{
         if(currentUser){
-           fetchRecentMesages()
-           setInterval(fetchRecentMesages, 30000)
-           return ()=> {clearInterval()}
+           fetchRecentMessages()
+           const intervalId = setInterval(fetchRecentMessages, 30000)
+           return ()=> {clearInterval(intervalId)}
+        } else {
+           setMessages([])
         }
     },[currentUser])
      //console.log(messages);

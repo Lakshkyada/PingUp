@@ -1,0 +1,26 @@
+{
+  "name": "post-service",
+  "version": "1.0.0",
+  "description": "Post and Story microservice for PingUp",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0",
+    "mongoose": "^8.18.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "jsonwebtoken": "^9.0.2",
+    "imagekit": "^5.2.0",
+    "inngest": "^4.0.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
