@@ -8,6 +8,7 @@ import userRoutes from './routes/userRoutes.js';
 import { inngest, functions } from './inngest/index.js';
 import { serve } from "inngest/express";
 import { connectRedis, redisClient } from './configs/redis.js';
+import { connectRabbitMq, closeRabbitMq } from './configs/rabbitmq.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '.env') });
@@ -41,6 +42,13 @@ const startServer = async () => {
       console.error('User Service: Redis connection error. Continuing without cache:', redisError.message);
     }
 
+    try {
+      await connectRabbitMq();
+      console.log('User Service: Connected to RabbitMQ');
+    } catch (rabbitError) {
+      console.error('User Service: RabbitMQ connection error. Continuing without event publishing:', rabbitError.message);
+    }
+
     server = app.listen(PORT, () => {
       console.log(`User Service running on port ${PORT}`);
     });
@@ -56,6 +64,7 @@ startServer();
 process.on('SIGINT', async () => {
   console.log('User Service: Shutting down gracefully...');
   server?.close(async () => {
+    await closeRabbitMq();
     await mongoose.connection.close();
     console.log('User Service: MongoDB connection closed');
     if (redisClient?.isOpen) {

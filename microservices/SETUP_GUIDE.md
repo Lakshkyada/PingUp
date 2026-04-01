@@ -326,3 +326,6 @@ using redis-server -> persistance data stoage
 
 open 7 terminal 
 one for client and one for evry microservices start
+
+used rebbitmq for user -> feed and post -> feed
+

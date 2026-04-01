@@ -9,6 +9,7 @@ import storyRoutes from './routes/storyRoutes.js';
 import './models/User.js';
 import { inngest, functions } from './inngest/index.js';
 import { serve } from "inngest/express";
+import { connectRabbitMq, closeRabbitMq } from './configs/rabbitmq.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '.env') });
@@ -27,19 +28,36 @@ app.use("/api/inngest", serve({ client: inngest, functions }));
 app.use('/api/posts', postRoutes);
 app.use('/api/stories', storyRoutes);
 
-// Database connection
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('Post Service: Connected to MongoDB'))
-  .catch(err => console.error('Post Service: MongoDB connection error:', err));
+let server;
 
-const server = app.listen(PORT, () => {
-  console.log(`Post Service running on port ${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('Post Service: Connected to MongoDB');
+
+    try {
+      await connectRabbitMq();
+      console.log('Post Service: Connected to RabbitMQ');
+    } catch (rabbitError) {
+      console.error('Post Service: RabbitMQ connection error. Continuing without event publishing:', rabbitError.message);
+    }
+
+    server = app.listen(PORT, () => {
+      console.log(`Post Service running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error('Post Service: Startup error:', err.message);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('Post Service: Shutting down gracefully...');
-  server.close(async () => {
+  server?.close(async () => {
+    await closeRabbitMq();
     await mongoose.connection.close();
     console.log('Post Service: MongoDB connection closed');
     process.exit(0);

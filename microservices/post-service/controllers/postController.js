@@ -1,5 +1,7 @@
 import Post from "../models/Post.js";
 import imagekit from "../configs/imageKit.js";
+import { randomUUID } from 'crypto';
+import { publishFeedEvent } from '../configs/rabbitmq.js';
 
 // Add Post
 export const addPost = async (req, res) => {
@@ -22,12 +24,29 @@ export const addPost = async (req, res) => {
       }
     }
 
-    await Post.create({
+    const post = await Post.create({
       user: userId,
       content,
       image_urls: uploadedImageUrls,
       post_type
     });
+
+    try {
+      await publishFeedEvent('post.created', {
+        event: 'post.created',
+        eventId: randomUUID(),
+        version: 1,
+        occurredAt: new Date().toISOString(),
+        postId: post._id.toString(),
+        authorId: userId,
+        createdAt: post.createdAt,
+        contentPreview: content ? String(content).slice(0, 280) : '',
+        firstImageUrl: uploadedImageUrls[0] || '',
+        postType: post_type || 'text'
+      });
+    } catch (eventError) {
+      console.error('Post Service: Failed to publish post.created event:', eventError.message);
+    }
 
     res.json({
       success: true,

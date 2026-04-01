@@ -8,6 +8,7 @@ import {
     sendConnectionRequest,
     getUserConnections,
     acceptConnectionRequest,
+    rejectConnectionRequest,
     getUserProfile,
     getImageKitAuth
 } from '../controllers/userController.js';
@@ -25,6 +26,7 @@ router.post('/unfollow', auth, unfollowUser);
 router.post('/connect', auth, sendConnectionRequest);
 router.get('/connections', auth, getUserConnections);
 router.post('/accept-connection', auth, acceptConnectionRequest);
+router.post('/reject-connection', auth, rejectConnectionRequest);
 router.post('/profile', auth, getUserProfile);
 router.get('/imagekit-auth', auth, getImageKitAuth);
 

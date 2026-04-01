@@ -7,8 +7,24 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { inngest } from "../inngest/index.js";
 import imagekit from "../configs/imageKit.js";
+import { randomUUID } from 'crypto';
+import { publishFeedEvent } from '../configs/rabbitmq.js';
 
 const USER_CACHE_TTL = 60 * 5; // 5 minutes
+
+const publishUserEvent = async (routingKey, payload) => {
+    try {
+        await publishFeedEvent(routingKey, {
+            event: routingKey,
+            eventId: randomUUID(),
+            version: 1,
+            occurredAt: new Date().toISOString(),
+            ...payload,
+        });
+    } catch (error) {
+        console.error(`Failed to publish ${routingKey} event:`, error.message);
+    }
+};
 
 const safeRedisSet = async (key, value, options = {}) => {
     if (!redisClient?.isReady) return;
@@ -218,21 +234,24 @@ export const followUser = async (req, res) => {
              return res.json({success: false, message: 'You cannot follow yourself'})
          }
 
-         const user = await User.findById(userId)
-   
-         if(user.following.map(f => f.toString()).includes(id)){
+         const user = await User.findById(userId).select('following').lean();
+
+         if(user?.following?.map(f => f.toString()).includes(id)){
              return res.json({success: false, message: 'You are already following this user'})
          }
-         
-         user.following.push(id);
-         await user.save()
 
-         const toUser = await User.findById(id)
-         toUser.followers.push(userId)
-         await toUser.save()
+         await Promise.all([
+             User.updateOne({ _id: userId }, { $addToSet: { following: id } }),
+             User.updateOne({ _id: id }, { $addToSet: { followers: userId } })
+         ]);
 
          // Invalidate cached user data to reflect follow changes immediately
          await safeRedisDel(`user:${userId}`, `user:${id}`)
+
+         await publishUserEvent('user.followed', {
+             followerId: userId,
+             followingId: id,
+         });
 
          res.json({success: true, message: 'Now you are following this user'})
      } catch(error){
@@ -251,16 +270,18 @@ export const unfollowUser = async (req, res) => {
              return res.json({success: false, message: 'You cannot unfollow yourself'})
          }
 
-         const user = await User.findById(userId)
-         user.following = user.following.filter(followedId => followedId.toString() !== id)
-         await user.save()
-
-         const toUser = await User.findById(id)
-         toUser.followers = toUser.followers.filter(followerId => followerId.toString() !== userId)
-         await toUser.save()
+         await Promise.all([
+             User.updateOne({ _id: userId }, { $pull: { following: id } }),
+             User.updateOne({ _id: id }, { $pull: { followers: userId } })
+         ]);
 
          // Invalidate cached user data to reflect unfollow changes immediately
          await safeRedisDel(`user:${userId}`, `user:${id}`)
+
+         await publishUserEvent('user.unfollowed', {
+             followerId: userId,
+             followingId: id,
+         });
 
          res.json({success: true, message: 'Now you no longer following this user'})
      } catch(error){
@@ -373,21 +394,51 @@ export const acceptConnectionRequest = async (req, res) => {
              return  res.json({ success: false, message: 'Connection not found'});
         }
 
-        const user = await User.findById(userId)
-        user.connections.push(id)
-        await user.save()
+        await Promise.all([
+            User.updateOne({ _id: userId }, { $addToSet: { connections: id } }),
+            User.updateOne({ _id: id }, { $addToSet: { connections: userId } }),
+            Connection.updateOne({ _id: connection._id }, { $set: { status: 'accepted' } })
+        ]);
 
-        const toUser = await User.findById(id)
-        toUser.connections.push(userId)
-        await toUser.save()
-
-        connection.status = 'accepted'
-        await connection.save()
+        await publishUserEvent('connection.accepted', {
+            userAId: userId,
+            userBId: id,
+        });
         
         res.json({success: true, message: 'Connection accepted successfully'})
     } catch (error){
          console.log(error);
          res.json({success: false, message: error.message})
+    }
+}
+
+// Reject Connection Request
+export const rejectConnectionRequest = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { id } = req.body;
+
+        const connection = await Connection.findOne({
+            from_user_id: id,
+            to_user_id: userId,
+            status: 'pending'
+        });
+
+        if (!connection) {
+            return res.json({ success: false, message: 'Pending connection not found' });
+        }
+
+        await connection.deleteOne();
+
+        await publishUserEvent('connection.rejected', {
+            requesterId: id,
+            receiverId: userId,
+        });
+
+        res.json({ success: true, message: 'Connection rejected successfully' });
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message });
     }
 }
 
