@@ -1,7 +1,47 @@
 import Message from "../models/Message.js";
+import User from "../models/User.js";
 
 // Keep active SSE streams keyed by user id.
 const connections = new Map();
+
+const toUserPayload = (userDoc, fallbackId) => ({
+    _id: String(userDoc?._id ?? fallbackId ?? ''),
+    username: userDoc?.username ?? '',
+    full_name: userDoc?.full_name ?? '',
+    profile_picture: userDoc?.profile_picture ?? '',
+});
+
+const hydrateMessages = async (messages, { hydrateFromOnly = false } = {}) => {
+    const ids = new Set();
+
+    for (const message of messages) {
+        if (message?.from_user_id) ids.add(String(message.from_user_id));
+        if (!hydrateFromOnly && message?.to_user_id) ids.add(String(message.to_user_id));
+    }
+
+    const snapshots = ids.size
+        ? await User.find({ _id: { $in: Array.from(ids) } })
+            .select('_id username full_name profile_picture')
+            .lean()
+        : [];
+
+    const usersById = new Map(snapshots.map((user) => [String(user._id), user]));
+
+    return messages.map((message) => {
+        const fromId = String(message.from_user_id ?? '');
+        const toId = String(message.to_user_id ?? '');
+        const fromSnapshot = usersById.get(fromId);
+        const toSnapshot = usersById.get(toId);
+
+        return {
+            ...message,
+            from_user_id: toUserPayload(fromSnapshot, fromId),
+            to_user_id: hydrateFromOnly
+                ? message.to_user_id
+                : toUserPayload(toSnapshot, toId),
+        };
+    });
+};
 
 // SSE stream endpoint for a specific user.
 export const sseController = (req, res) => {
@@ -47,7 +87,8 @@ export const sendMessage = async (req, res) => {
             media_url
         });
 
-        const messageWithUserData = await Message.findById(message._id).populate('from_user_id');
+        const freshMessage = await Message.findById(message._id).lean();
+        const [messageWithUserData] = await hydrateMessages([freshMessage], { hydrateFromOnly: true });
 
         res.json({ success: true, message: messageWithUserData });
 
@@ -74,7 +115,9 @@ export const getChatMessages = async (req, res) => {
                 { from_user_id: userId, to_user_id },
                 { from_user_id: to_user_id, to_user_id: userId }
             ]
-        }).populate('from_user_id to_user_id').sort({ createdAt: 1 });
+        }).sort({ createdAt: 1 }).lean();
+
+        const hydratedMessages = await hydrateMessages(messages);
 
         // Mark messages as seen
         await Message.updateMany(
@@ -82,7 +125,7 @@ export const getChatMessages = async (req, res) => {
             { seen: true }
         );
 
-        res.json({ success: true, messages });
+        res.json({ success: true, messages: hydratedMessages });
     } catch (error) {
         console.log(error);
         res.json({ success: false, message: error.message });
@@ -94,40 +137,23 @@ export const getUserRecentMessages = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Get the latest message for each conversation
-        const conversations = await Message.aggregate([
-            {
-                $match: {
-                    $or: [{ from_user_id: userId }, { to_user_id: userId }]
-                }
-            },
-            {
-                $sort: { createdAt: -1 }
-            },
-            {
-                $group: {
-                    _id: {
-                        $cond: {
-                            if: { $eq: ["$from_user_id", userId] },
-                            then: "$to_user_id",
-                            else: "$from_user_id"
-                        }
-                    },
-                    lastMessage: { $first: "$$ROOT" }
-                }
-            },
-            {
-                $replaceRoot: { newRoot: "$lastMessage" }
+        const allMessages = await Message.find({
+            $or: [{ from_user_id: userId }, { to_user_id: userId }]
+        }).sort({ createdAt: -1 }).lean();
+
+        const latestByPeerId = new Map();
+        for (const message of allMessages) {
+            const fromId = String(message.from_user_id);
+            const toId = String(message.to_user_id);
+            const peerId = fromId === String(userId) ? toId : fromId;
+
+            if (!latestByPeerId.has(peerId)) {
+                latestByPeerId.set(peerId, message);
             }
-        ]);
+        }
 
-        // Populate user data
-        const populatedConversations = await Message.populate(conversations, [
-            { path: 'from_user_id', select: 'username full_name profile_picture' },
-            { path: 'to_user_id', select: 'username full_name profile_picture' }
-        ]);
-
-        res.json({ success: true, conversations: populatedConversations });
+        const conversations = await hydrateMessages(Array.from(latestByPeerId.values()));
+        res.json({ success: true, conversations });
     } catch (error) {
         console.log(error);
         res.json({ success: false, message: error.message });

@@ -9,6 +9,7 @@ import { inngest, functions } from './inngest/index.js';
 import { serve } from "inngest/express";
 import { connectRedis, redisClient } from './configs/redis.js';
 import { connectRabbitMq, closeRabbitMq } from './configs/rabbitmq.js';
+import { startUserEventConsumer, stopUserEventConsumer } from './consumers/userEventConsumer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '.env') });
@@ -49,6 +50,13 @@ const startServer = async () => {
       console.error('User Service: RabbitMQ connection error. Continuing without event publishing:', rabbitError.message);
     }
 
+    try {
+      await startUserEventConsumer();
+      console.log('User Service: User event consumer started');
+    } catch (consumerError) {
+      console.error('User Service: User event consumer error. Continuing without sync:', consumerError.message);
+    }
+
     server = app.listen(PORT, () => {
       console.log(`User Service running on port ${PORT}`);
     });
@@ -64,6 +72,7 @@ startServer();
 process.on('SIGINT', async () => {
   console.log('User Service: Shutting down gracefully...');
   server?.close(async () => {
+    await stopUserEventConsumer();
     await closeRabbitMq();
     await mongoose.connection.close();
     console.log('User Service: MongoDB connection closed');

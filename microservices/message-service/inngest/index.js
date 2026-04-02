@@ -13,15 +13,20 @@ export const inngest = new Inngest({ id: "pingup-app", isDev: true  });
        triggers: { cron: 'TZ=America/New_York 0 9 * * *' }
     },
      async ({step}) => {
-         const messages = await Message.find({seen: false}).populate('to_user_id');
-         const unseenCount = {}
+         const messages = await Message.find({ seen: false }).lean();
+         const unseenCount = {};
 
-         messages.map(message => {
-             unseenCount[message.to_user_id._id] = (unseenCount[message.to_user_id._id] || 0) + 1;
-         })
+         messages.forEach((message) => {
+             const receiverId = String(message.to_user_id);
+             unseenCount[receiverId] = (unseenCount[receiverId] || 0) + 1;
+         });
 
          for(const userId in unseenCount){
-             const user = await User.findById(userId)
+             const user = await User.findById(userId).lean();
+             if (!user?.email) {
+                 console.warn('Message Service: Skipping unseen notification for missing user snapshot/email', { userId });
+                 continue;
+             }
 
              const subject = ` You have ${unseenCount[userId]} unseen messages`;
 

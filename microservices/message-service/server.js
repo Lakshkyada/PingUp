@@ -8,6 +8,8 @@ import messageRoutes from './routes/messageRoutes.js';
 import './models/User.js';
 import { inngest, functions } from './inngest/index.js';
 import { serve } from "inngest/express";
+import { connectRabbitMq, closeRabbitMq } from './configs/rabbitmq.js';
+import { startUserEventConsumer, stopUserEventConsumer } from './consumers/userEventConsumer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,8 +35,20 @@ app.use("/api/inngest", serve({ client: inngest, functions }));
 app.use('/api/messages', messageRoutes);
 
 // Database connection
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('Message Service: Connected to MongoDB'))
+const messageMongoUri = process.env.MESSAGE_MONGO_URI || process.env.MONGO_URI;
+
+mongoose.connect(messageMongoUri)
+  .then(async () => {
+    console.log('Message Service: Connected to MongoDB (pingup-message mode)');
+
+    try {
+      await connectRabbitMq();
+      await startUserEventConsumer();
+      console.log('Message Service: RabbitMQ consumer started');
+    } catch (rabbitError) {
+      console.error('Message Service: RabbitMQ consumer startup error. Continuing without live user sync:', rabbitError.message);
+    }
+  })
   .catch(err => console.error('Message Service: MongoDB connection error:', err));
 
 const server = app.listen(PORT, () => {
@@ -45,6 +59,8 @@ const server = app.listen(PORT, () => {
 process.on('SIGINT', async () => {
   console.log('Message Service: Shutting down gracefully...');
   server.close(async () => {
+    await stopUserEventConsumer();
+    await closeRabbitMq();
     await mongoose.connection.close();
     console.log('Message Service: MongoDB connection closed');
     process.exit(0);

@@ -71,10 +71,6 @@ export const registerUser = async (req, res) => {
                 username: user.username,
                 email: user.email,
                 full_name: user.full_name,
-                bio: user.bio || '',
-                location: user.location || '',
-                profile_picture: user.profile_picture || '',
-                followers_count: Array.isArray(user.followers) ? user.followers.length : 0,
                 created_at: user.createdAt,
             },
         });
