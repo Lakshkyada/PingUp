@@ -66,7 +66,7 @@ FRONTEND_URL=http://localhost:5173
 
 #### message-service/.env
 ```
-MONGO_URI=mongodb://localhost:27017/pingup
+MONGO_URI=mongodb://localhost:27017/pingup-message
 JWT_SECRET=your_jwt_secret_here
 MESSAGE_SERVICE_PORT=3005
 SMTP_USER=your_smtp_user

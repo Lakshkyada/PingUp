@@ -1,44 +1,22 @@
 import Story from "../models/Story.js";
-
-const resolveUserServiceUrl = () => {
-    const baseUrl = process.env.USER_SERVICE_URL || 'http://localhost:3001';
-    return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-};
+import UserRelationship from '../models/UserRelationship.js';
 
 const getAllowedStoryUserIds = async (req, userId) => {
-    const userServiceUrl = resolveUserServiceUrl();
-
     try {
-        const response = await fetch(`${userServiceUrl}/api/users/connections`, {
-            method: 'GET',
-            headers: {
-                Authorization: req.headers.authorization || '',
-                Cookie: req.headers.cookie || ''
-            }
-        });
+        const relationship = await UserRelationship.findOne({ user_id: userId })
+            .select('connections following')
+            .lean();
 
-        if (!response.ok) {
-            throw new Error(`User service responded with ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (!data?.success) {
-            throw new Error(data?.message || 'Failed to fetch user connections');
-        }
-
-        const relatedUsers = [
-            ...(Array.isArray(data.connections) ? data.connections : []),
-            ...(Array.isArray(data.following) ? data.following : [])
-        ];
-
-        const relatedIds = relatedUsers
-            .map((user) => user?._id)
+        const relatedIds = [
+            ...(Array.isArray(relationship?.connections) ? relationship.connections : []),
+            ...(Array.isArray(relationship?.following) ? relationship.following : [])
+        ]
             .filter(Boolean)
             .map((id) => id.toString());
 
         return [...new Set([userId.toString(), ...relatedIds])];
     } catch (error) {
-        console.error('Story visibility fallback to self only:', error.message);
+        console.error('Story visibility fallback to self only from local relationship cache:', error.message);
         return [userId.toString()];
     }
 };

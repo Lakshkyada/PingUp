@@ -60,6 +60,8 @@ export const publishFeedEvent = async (routingKey, event) => {
   );
 };
 
+export const getRabbitMqChannel = () => channel;
+
 export const closeRabbitMq = async () => {
   if (channel) {
     await channel.close();

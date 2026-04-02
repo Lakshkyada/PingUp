@@ -35,9 +35,7 @@ app.use("/api/inngest", serve({ client: inngest, functions }));
 app.use('/api/messages', messageRoutes);
 
 // Database connection
-const messageMongoUri = process.env.MESSAGE_MONGO_URI || process.env.MONGO_URI;
-
-mongoose.connect(messageMongoUri)
+mongoose.connect(process.env.MONGO_URI)
   .then(async () => {
     console.log('Message Service: Connected to MongoDB (pingup-message mode)');
 
