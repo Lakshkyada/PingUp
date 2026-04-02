@@ -51,18 +51,29 @@ const upsertRelationshipSnapshot = async (payload = {}) => {
     throw new Error('Post Service: Missing user_id in relationship snapshot payload');
   }
 
-  await UserRelationship.updateOne(
-    { user_id: userId },
-    {
-      $setOnInsert: { user_id: userId },
-      $set: {
-        followers: Array.isArray(payload.followers) ? payload.followers : [],
-        following: Array.isArray(payload.following) ? payload.following : [],
-        connections: Array.isArray(payload.connections) ? payload.connections : [],
-      }
-    },
-    { upsert: true }
-  );
+  const relationshipSetPatch = {};
+
+  if (Array.isArray(payload.followers)) {
+    relationshipSetPatch.followers = payload.followers;
+  }
+
+  if (Array.isArray(payload.following)) {
+    relationshipSetPatch.following = payload.following;
+  }
+
+  if (Array.isArray(payload.connections)) {
+    relationshipSetPatch.connections = payload.connections;
+  }
+
+  const updateDoc = {
+    $setOnInsert: { user_id: userId, followers: [], following: [], connections: [] }
+  };
+
+  if (Object.keys(relationshipSetPatch).length > 0) {
+    updateDoc.$set = relationshipSetPatch;
+  }
+
+  await UserRelationship.updateOne({ user_id: userId }, updateDoc, { upsert: true });
 };
 
 const applyFollowEvent = async (eventType, payload = {}) => {
@@ -185,6 +196,7 @@ export const startUserEventConsumer = async () => {
   await channel.assertExchange(USER_EVENTS_EXCHANGE, 'topic', { durable: true });
   await channel.assertQueue(USER_EVENTS_QUEUE, { durable: true });
   await channel.bindQueue(USER_EVENTS_QUEUE, USER_EVENTS_EXCHANGE, 'user.*');
+  await channel.bindQueue(USER_EVENTS_QUEUE, USER_EVENTS_EXCHANGE, 'connection.*');
   await channel.prefetch(20);
 
   const queueState = await channel.checkQueue(USER_EVENTS_QUEUE);

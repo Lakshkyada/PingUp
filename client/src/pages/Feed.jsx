@@ -6,9 +6,13 @@ import PostCard from '../components/PostCard'
 import RecentMessages from '../components/RecentMessages'
 import toast from 'react-hot-toast'
 import api from '../api/axios'
+import { useLocation } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 const Feed = () => {
   const [feeds, setFeeds] = useState([])
   const [loading , setLoading] = useState(true)
+  const location = useLocation()
+  const currentUser = useSelector((state)=>state.user.value)
   const fetchFeeds = async () => {
         try {
            setLoading(true)
@@ -23,10 +27,64 @@ const Feed = () => {
         }
         setLoading(false)
   }
+
+  const fetchFeedsWithoutLoader = async () => {
+        try {
+            const {data} = await api.get('/api/post/feed')
+           if(data.success){
+              setFeeds(data.posts)
+              return data.posts
+           }
+        } catch {
+            // no-op best effort retry path
+        }
+        return null
+  }
+
   useEffect(()=>{
      fetchFeeds()
      
   },[])
+
+  useEffect(() => {
+    if (!location.state?.fromCreatePost || !currentUser?._id) return;
+
+    const optimisticPost = location.state?.optimisticPost;
+    if (optimisticPost) {
+      setFeeds((prev) => {
+        const alreadyAdded = prev.some((post) => post?._id === optimisticPost._id);
+        return alreadyAdded ? prev : [optimisticPost, ...prev];
+      });
+    }
+
+    let cancelled = false;
+    const maxAttempts = 5;
+    let attempt = 0;
+
+    const pollForOwnPost = async () => {
+      while (!cancelled && attempt < maxAttempts) {
+        attempt += 1;
+        const posts = await fetchFeedsWithoutLoader();
+        const hasOwnPost = Array.isArray(posts)
+          && posts.some((post) => String(post?.user?._id) === String(currentUser._id));
+
+        if (hasOwnPost) {
+          if (optimisticPost) {
+            setFeeds((prev) => prev.filter((post) => post?._id !== optimisticPost._id));
+          }
+          break;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      }
+    };
+
+    pollForOwnPost();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location.state, currentUser?._id]);
   return !loading ? (
     <div className='h-full overflow-y-scroll no-scrollbar py-10 xl:pr-5 flex items-start justify-center xl:gap-8 '>
         {/* stories and post list */}

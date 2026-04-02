@@ -38,14 +38,36 @@ const CreatePost = () => {
             )
          }
 
-         const {data} = await api.post('api/post/add', {
+         const {data} = await api.post('/api/posts/', {
             content,
             post_type: postType,
             image_urls,
          })
             
             if(data.success){
-               navigate('/')
+               const optimisticPost = {
+                  _id: `optimistic-${Date.now()}`,
+                  user: {
+                     _id: user?._id,
+                     full_name: user?.full_name || 'You',
+                     username: user?.username || 'you',
+                     profile_picture: user?.profile_picture || ''
+                  },
+                  content: content || '',
+                  image_urls,
+                  post_type: postType,
+                  likes_count: [],
+                  createdAt: new Date().toISOString(),
+                  optimistic: true
+               };
+
+               navigate('/', {
+                  state: {
+                     fromCreatePost: true,
+                     createdAt: Date.now(),
+                     optimisticPost
+                  }
+               })
             } else {
                console.log(data.message);
                throw new Error(data.message)

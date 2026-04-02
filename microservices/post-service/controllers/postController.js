@@ -1,7 +1,31 @@
 import Post from "../models/Post.js";
 import imagekit from "../configs/imageKit.js";
 import { randomUUID } from 'crypto';
-import { publishFeedEvent } from '../configs/rabbitmq.js';
+import { connectRabbitMq, publishFeedEvent } from '../configs/rabbitmq.js';
+
+const publishPostCreatedEvent = async (eventPayload) => {
+  let lastError;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      if (attempt > 1) {
+        await connectRabbitMq();
+      }
+
+      const published = await publishFeedEvent('post.created', eventPayload);
+      if (!published) {
+        throw new Error('RabbitMQ publish returned false');
+      }
+
+      return;
+    } catch (error) {
+      lastError = error;
+      console.error(`Post Service: post.created publish attempt ${attempt} failed:`, error.message);
+    }
+  }
+
+  throw lastError || new Error('Failed to publish post.created event');
+};
 
 // Add Post
 export const addPost = async (req, res) => {
@@ -31,21 +55,27 @@ export const addPost = async (req, res) => {
       post_type
     });
 
+    const postCreatedEvent = {
+      event: 'post.created',
+      eventId: randomUUID(),
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      postId: post._id.toString(),
+      authorId: userId,
+      createdAt: post.createdAt,
+      contentPreview: content ? String(content).slice(0, 280) : '',
+      firstImageUrl: uploadedImageUrls[0] || '',
+      postType: post_type || 'text'
+    };
+
     try {
-      await publishFeedEvent('post.created', {
-        event: 'post.created',
-        eventId: randomUUID(),
-        version: 1,
-        occurredAt: new Date().toISOString(),
-        postId: post._id.toString(),
-        authorId: userId,
-        createdAt: post.createdAt,
-        contentPreview: content ? String(content).slice(0, 280) : '',
-        firstImageUrl: uploadedImageUrls[0] || '',
-        postType: post_type || 'text'
-      });
+      await publishPostCreatedEvent(postCreatedEvent);
     } catch (eventError) {
-      console.error('Post Service: Failed to publish post.created event:', eventError.message);
+      await Post.findByIdAndDelete(post._id);
+      return res.status(503).json({
+        success: false,
+        message: 'Post service event pipeline unavailable. Please try again.'
+      });
     }
 
     res.json({
@@ -69,14 +99,48 @@ export const likePosts = async (req, res) => {
     const { postId } = req.body;
 
     const post = await Post.findById(postId);
-    if (post.likes_count.includes(userId)) {
-      post.likes_count = post.likes_count.filter(user => user !== userId);
+    if (!post) {
+      return res.json({ success: false, message: 'Post not found' });
+    }
+
+    const alreadyLiked = post.likes_count.some((id) => id.toString() === userId.toString());
+
+    if (alreadyLiked) {
+      post.likes_count = post.likes_count.filter((id) => id.toString() !== userId.toString());
       await post.save();
-      res.json({ success: true, message: 'Post unliked' });
+
+      try {
+        await publishFeedEvent('post.unliked', {
+          event: 'post.unliked',
+          eventId: randomUUID(),
+          version: 1,
+          occurredAt: new Date().toISOString(),
+          postId: post._id.toString(),
+          likerId: userId,
+        });
+      } catch (eventError) {
+        console.error('Post Service: Failed to publish post.unliked event:', eventError.message);
+      }
+
+      res.json({ success: true, message: 'Post unliked', liked: false });
     } else {
       post.likes_count.push(userId);
       await post.save();
-      res.json({ success: true, message: 'Post liked' });
+
+      try {
+        await publishFeedEvent('post.liked', {
+          event: 'post.liked',
+          eventId: randomUUID(),
+          version: 1,
+          occurredAt: new Date().toISOString(),
+          postId: post._id.toString(),
+          likerId: userId,
+        });
+      } catch (eventError) {
+        console.error('Post Service: Failed to publish post.liked event:', eventError.message);
+      }
+
+      res.json({ success: true, message: 'Post liked', liked: true });
     }
   } catch (error) {
     console.log(error);
@@ -113,4 +177,19 @@ export const getImageKitAuth = async (req, res) => {
         console.error('ImageKit auth error:', error.message);
         res.status(500).json({ success: false, message: error.message });
     }
+};
+
+// Get posts for a specific user
+export const getPostsByUser = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const posts = await Post.find({ user: userId })
+      .populate('user', 'full_name username profile_picture')
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, posts });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
 };

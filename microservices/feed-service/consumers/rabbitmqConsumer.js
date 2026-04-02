@@ -6,7 +6,7 @@ import {
   closeRabbitMqConnection
 } from '../configs/rabbitmq.js';
 import ProcessedEvent from '../models/ProcessedEvent.js';
-import { handlePostCreatedEvent } from '../handlers/postEventHandler.js';
+import { handlePostCreatedEvent, handlePostLikedEvent, handlePostUnlikedEvent } from '../handlers/postEventHandler.js';
 import { handleUserEvent } from '../handlers/userEventHandler.js';
 
 const MAX_RETRIES = 3;
@@ -79,6 +79,16 @@ export const initializeFeedConsumers = async () => {
       processMessage(POST_EVENTS_QUEUE, msg, async (eventType, payload) => {
         if (eventType === 'post.created') {
           await handlePostCreatedEvent(payload);
+          return;
+        }
+
+        if (eventType === 'post.liked') {
+          await handlePostLikedEvent(payload);
+          return;
+        }
+
+        if (eventType === 'post.unliked') {
+          await handlePostUnlikedEvent(payload);
         }
       });
     },

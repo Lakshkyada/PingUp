@@ -1,7 +1,8 @@
 import Story from "../models/Story.js";
 import UserRelationship from '../models/UserRelationship.js';
+import User from '../models/User.js';
 
-const getAllowedStoryUserIds = async (req, userId) => {
+const getAllowedStoryUserIds = async (userId) => {
     try {
         const relationship = await UserRelationship.findOne({ user_id: userId })
             .select('connections following')
@@ -31,6 +32,28 @@ export const addUserStory = async (req, res) => {
             return res.json({ success: false, message: 'media_url is required for media stories' });
         }
         
+        // Ensure User snapshot exists for story population
+        const userSnapshotExists = await User.findById(userId);
+        if (!userSnapshotExists) {
+            // Create a minimal placeholder until consumer updates it with full data
+            await User.findByIdAndUpdate(
+                userId,
+                {
+                    full_name: req.user.full_name || 'User',
+                    username: req.user.username || 'user',
+                    profile_picture: req.user.profile_picture || ''
+                },
+                { upsert: true, new: true }
+            );
+        }
+        
+        // Ensure UserRelationship snapshot exists
+        await UserRelationship.updateOne(
+            { user_id: userId },
+            { $setOnInsert: { user_id: userId, followers: [], following: [], connections: [] } },
+            { upsert: true }
+        );
+        
         // create story
         await Story.create({
             user: userId,
@@ -51,7 +74,7 @@ export const addUserStory = async (req, res) => {
 export const getStories = async (req, res) => {
     try {
         const userId = req.user.id;
-        const allowedUserIds = await getAllowedStoryUserIds(req, userId);
+        const allowedUserIds = await getAllowedStoryUserIds(userId);
 
         const stories = await Story.find({
             user: { $in: allowedUserIds }

@@ -21,13 +21,17 @@ const Profile = () => {
   const fetchUser = async (profileId) => {
      try {
 
-         const {data} = await api.post('/api/user/profiles', {profileId})
-         if(data.success){
-            setUser(data.profile)
-            setPosts(data.posts)
+         const [profileResponse, postsResponse] = await Promise.all([
+           api.post('/api/user/profiles', { profileId }),
+           api.get(`/api/posts/user/${profileId}`)
+         ]);
+
+         if(profileResponse.data.success){
+            setUser(profileResponse.data.profile)
+            setPosts(postsResponse.data?.success ? postsResponse.data.posts : [])
          } else {
-            console.log(data.message);
-            toast.error(data.message)
+            console.log(profileResponse.data.message);
+            toast.error(profileResponse.data.message)
          }
      } catch (error) {
          toast.error(error.message)

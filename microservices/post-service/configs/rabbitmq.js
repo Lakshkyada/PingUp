@@ -4,7 +4,7 @@ const rabbitUrl = process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672
 const FEED_EXCHANGE = 'feed.events';
 const FEED_DLX_EXCHANGE = 'feed.events.dlx';
 const POST_EVENTS_QUEUE = 'feed.post-events';
-const USER_EVENTS_QUEUE = 'feed.user-events';
+const USER_EVENTS_QUEUE = 'post.user-events';
 
 let connection;
 let channel;
@@ -34,9 +34,7 @@ export const connectRabbitMq = async () => {
   });
 
   await channel.assertQueue(USER_EVENTS_QUEUE, {
-    durable: true,
-    deadLetterExchange: FEED_DLX_EXCHANGE,
-    deadLetterRoutingKey: `${USER_EVENTS_QUEUE}.dlq`
+    durable: true
   });
 
   await channel.bindQueue(POST_EVENTS_QUEUE, FEED_EXCHANGE, 'post.*');

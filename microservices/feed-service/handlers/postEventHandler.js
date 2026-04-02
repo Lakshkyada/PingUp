@@ -63,3 +63,43 @@ export const handlePostCreatedEvent = async (payload) => {
     console.log('Could not invalidate follower caches:', error.message);
   }
 };
+
+export const handlePostLikedEvent = async (payload) => {
+  const { postId, likerId } = payload;
+
+  if (!postId || !likerId) {
+    throw new Error('post.liked payload missing postId/likerId');
+  }
+
+  const post = await Post.findByIdAndUpdate(
+    postId,
+    { $addToSet: { likes_count: likerId } },
+    { new: true }
+  ).lean();
+
+  if (!post?.user) {
+    return;
+  }
+
+  await safeRedisDel(`feed:${post.user.toString()}`);
+};
+
+export const handlePostUnlikedEvent = async (payload) => {
+  const { postId, likerId } = payload;
+
+  if (!postId || !likerId) {
+    throw new Error('post.unliked payload missing postId/likerId');
+  }
+
+  const post = await Post.findByIdAndUpdate(
+    postId,
+    { $pull: { likes_count: likerId } },
+    { new: true }
+  ).lean();
+
+  if (!post?.user) {
+    return;
+  }
+
+  await safeRedisDel(`feed:${post.user.toString()}`);
+};
