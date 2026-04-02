@@ -2,7 +2,6 @@ import express from 'express';
 import {
     getUserData,
     updateUserData,
-    discoverUsers,
     followUser,
     unfollowUser,
     sendConnectionRequest,
@@ -20,7 +19,6 @@ const router = express.Router();
 router.get('/me', auth, getUserData);
 router.put('/update', auth, updateUserData);
 router.post('/update', auth, updateUserData);
-router.post('/discover', auth, discoverUsers);
 router.post('/follow', auth, followUser);
 router.post('/unfollow', auth, unfollowUser);
 router.post('/connect', auth, sendConnectionRequest);

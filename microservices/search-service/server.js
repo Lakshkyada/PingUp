@@ -1,8 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import mongoose from 'mongoose';
 import searchRoutes from './routes/searchRoutes.js';
+import { ensureUsersIndex, closeElasticsearchClient } from './configs/elasticsearch.js';
+import { closeRabbitMqConnection } from './configs/rabbitmq.js';
+import { startUserEventConsumer, stopUserEventConsumer } from './consumers/userEventConsumer.js';
 
 dotenv.config();
 
@@ -16,25 +18,53 @@ app.use(express.json());
 // Routes
 app.use('/api/search', searchRoutes);
 
-// Database connection
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('Search Service: Connected to MongoDB'))
-  .catch(err => console.error('Search Service: MongoDB connection error:', err));
+let server;
 
-const server = app.listen(PORT, () => {
-  console.log(`Search Service running on port ${PORT}`);
-});
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
+const shutdown = async () => {
   console.log('Search Service: Shutting down gracefully...');
-  server.close(async () => {
-    await mongoose.connection.close();
-    console.log('Search Service: MongoDB connection closed');
-    process.exit(0);
+
+  if (server) {
+    await new Promise((resolve) => server.close(resolve));
+  }
+
+  await stopUserEventConsumer();
+  await closeRabbitMqConnection();
+  await closeElasticsearchClient();
+
+  process.exit(0);
+};
+
+const bootstrap = async () => {
+  await new Promise((resolve, reject) => {
+    server = app.listen(PORT, () => {
+      console.log(`Search Service running on port ${PORT}`);
+      resolve();
+    });
+
+    server.on('error', (error) => {
+      reject(error);
+    });
   });
-  setTimeout(() => {
-    console.error('Search Service: Forced shutdown');
-    process.exit(1);
-  }, 10000);
+
+  try {
+    await ensureUsersIndex();
+    console.log('Search Service: Elasticsearch index ready');
+  } catch (elasticError) {
+    console.error('Search Service: Elasticsearch initialization failed. Continuing with degraded search:', elasticError.message);
+  }
+
+  try {
+    await startUserEventConsumer();
+    console.log('Search Service: RabbitMQ consumer started');
+  } catch (rabbitError) {
+    console.error('Search Service: RabbitMQ consumer error. Continuing without live indexing:', rabbitError.message);
+  }
+};
+
+bootstrap().catch((error) => {
+  console.error('Search Service bootstrap error:', error);
+  process.exit(1);
 });
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

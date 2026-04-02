@@ -1,6 +1,25 @@
 import User from "../models/User.js";
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
+import { publishFeedEvent } from '../configs/rabbitmq.js';
+
+const publishUserEvent = async (routingKey, payload) => {
+    try {
+        const event = {
+            event: routingKey,
+            eventId: randomUUID(),
+            version: 1,
+            occurredAt: new Date().toISOString(),
+            ...payload,
+        };
+
+        await publishFeedEvent(routingKey, event);
+        console.log(`Auth Service: Published ${routingKey} event`, { eventId: event.eventId });
+    } catch (eventError) {
+        console.error(`Auth Service: Failed to publish ${routingKey}:`, eventError.message);
+    }
+};
 
 const setAuthCookie = (res, token) => {
     res.setHeader('Set-Cookie', `token=${token}; Path=/; HttpOnly; SameSite=Lax`);
@@ -45,6 +64,20 @@ export const registerUser = async (req, res) => {
             full_name: full_name.trim()
         });
         await user.save();
+
+        await publishUserEvent('user.created', {
+            user: {
+                user_id: user._id.toString(),
+                username: user.username,
+                email: user.email,
+                full_name: user.full_name,
+                bio: user.bio || '',
+                location: user.location || '',
+                profile_picture: user.profile_picture || '',
+                followers_count: Array.isArray(user.followers) ? user.followers.length : 0,
+                created_at: user.createdAt,
+            },
+        });
 
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
         console.log('Generated token:', token);

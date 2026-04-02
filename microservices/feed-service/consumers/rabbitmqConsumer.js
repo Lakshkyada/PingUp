@@ -89,6 +89,15 @@ export const initializeFeedConsumers = async () => {
     USER_EVENTS_QUEUE,
     (msg) => {
       if (!msg) return;
+      try {
+        const preview = parseMessage(msg);
+        console.log('Feed Service: Received user event', {
+          event: preview?.event,
+          eventId: preview?.eventId,
+        });
+      } catch {
+        // Best effort logging; processing path handles parse errors.
+      }
       processMessage(USER_EVENTS_QUEUE, msg, handleUserEvent);
     },
     { noAck: false }

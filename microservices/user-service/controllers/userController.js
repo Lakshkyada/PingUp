@@ -14,13 +14,16 @@ const USER_CACHE_TTL = 60 * 5; // 5 minutes
 
 const publishUserEvent = async (routingKey, payload) => {
     try {
-        await publishFeedEvent(routingKey, {
+        const event = {
             event: routingKey,
             eventId: randomUUID(),
             version: 1,
             occurredAt: new Date().toISOString(),
             ...payload,
-        });
+        };
+
+        await publishFeedEvent(routingKey, event);
+        console.log(`User Service: Published ${routingKey} event`, { eventId: event.eventId });
     } catch (error) {
         console.error(`Failed to publish ${routingKey} event:`, error.message);
     }
@@ -89,6 +92,20 @@ export const registerUser = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const user = new User({ email, password: hashedPassword, username, full_name });
         await user.save();
+
+        await publishUserEvent('user.created', {
+            user: {
+                user_id: user._id.toString(),
+                username: user.username,
+                email: user.email,
+                full_name: user.full_name,
+                bio: user.bio || '',
+                location: user.location || '',
+                profile_picture: user.profile_picture || '',
+                followers_count: Array.isArray(user.followers) ? user.followers.length : 0,
+                created_at: user.createdAt,
+            },
+        });
         
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
         res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
@@ -187,40 +204,26 @@ export const updateUserData = async (req, res) => {
            await safeRedisSet(cacheKey, JSON.stringify(user), {
              EX: USER_CACHE_TTL
         });
+
+        await publishUserEvent('user.updated', {
+            user: {
+                user_id: user._id.toString(),
+                username: user.username,
+                email: user.email,
+                full_name: user.full_name,
+                bio: user.bio || '',
+                location: user.location || '',
+                profile_picture: user.profile_picture || '',
+                followers_count: Array.isArray(user.followers) ? user.followers.length : 0,
+                created_at: user.createdAt,
+            },
+        });
+
         console.log("User updated:", user);
         res.json({success: true, user, message: 'Profile updated successfully'});
      } catch (error){
         console.log(error);
         res.json({success: false, message: error.message})
-     }
-}
-
-// find Users using username, email, location, name
-export const discoverUsers = async (req, res) => {
-     try{
-         const userId = req.user.id;
-         // console.log("userId:",typeof userId)
-         const {input} = req.body;
-         // const user = await User.findById(userId)
-         // console.log("Searching users with input:", user);
-         const allUsers = await User.find(
-            {
-                $or: [
-                    {username: new RegExp(input, 'i')},
-                    {email: new RegExp(input, 'i')},
-                    {full_name: new RegExp(input, 'i')},
-                    {location: new RegExp(input, 'i')},
-                ]
-            }
-         )
-         // console.log("All users found:",typeof allUsers[0]._id);
-         const filteredUsers = allUsers.filter(user => user._id.toString() !== userId);
-         res.json({success:true, users: filteredUsers})
-         // res.json({success:true, users: allUsers});
-         // console.log("All users sent:", allUsers);
-     } catch(error){
-         console.log(error);
-         res.json({success: false, message: error.message})
      }
 }
 

@@ -1,83 +1,54 @@
-import User from "../models/User.js";
-import Post from "../models/Post.js";
+import client, { USER_INDEX } from '../configs/elasticsearch.js';
 
-// Search Users
-export const searchUsers = async (req, res) => {
+const SEARCH_FIELDS = ['username^3', 'email^2', 'full_name^2', 'location', 'bio'];
+
+const toUserResponse = (source = {}) => ({
+    user_id: source.user_id ?? '',
+    username: source.username ?? '',
+    name: source.name ?? source.full_name ?? '',
+    bio: source.bio ?? '',
+    profile_picture: source.profile_picture ?? '',
+    followers_count: Number(source.followers_count ?? 0),
+});
+
+const searchUsersFromElastic = async (query, currentUserId) => {
+    const response = await client.search({
+        index: USER_INDEX,
+        size: 20,
+        query: {
+            multi_match: {
+                query,
+                fields: SEARCH_FIELDS,
+                fuzziness: 'AUTO',
+                type: 'best_fields',
+            },
+        },
+    });
+
+    const hits = response?.hits?.hits ?? response?.body?.hits?.hits ?? [];
+
+    return hits
+        .map((hit) => toUserResponse(hit?._source ?? hit?.source ?? {}))
+        .filter((user) => !currentUserId || user.user_id !== currentUserId);
+};
+
+const handleUserSearch = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user?.id;
         const { query } = req.query;
-
+        console.log(`Search query: "${query}" from user ID: ${userId}`);
         if (!query || query.trim() === '') {
             return res.json({ success: true, users: [] });
         }
 
-        const users = await User.find({
-            $or: [
-                { username: new RegExp(query, 'i') },
-                { email: new RegExp(query, 'i') },
-                { full_name: new RegExp(query, 'i') },
-                { location: new RegExp(query, 'i') },
-            ]
-        }).select('-password');
+        const users = await searchUsersFromElastic(query.trim(), userId);
 
-        const filteredUsers = users.filter(user => user._id.toString() !== userId);
-
-        res.json({ success: true, users: filteredUsers });
+        res.json({ success: true, users });
     } catch (error) {
         console.log(error);
-        res.json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Search Posts
-export const searchPosts = async (req, res) => {
-    try {
-        const { query } = req.query;
-
-        if (!query || query.trim() === '') {
-            return res.json({ success: true, posts: [] });
-        }
-
-        const posts = await Post.find({
-            content: new RegExp(query, 'i')
-        }).populate('user', 'username full_name profile_picture').sort({ createdAt: -1 });
-
-        res.json({ success: true, posts });
-    } catch (error) {
-        console.log(error);
-        res.json({ success: false, message: error.message });
-    }
-};
-
-// Global Search (users and posts)
-export const globalSearch = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const { query } = req.query;
-
-        if (!query || query.trim() === '') {
-            return res.json({ success: true, users: [], posts: [] });
-        }
-
-        // Search users
-        const users = await User.find({
-            $or: [
-                { username: new RegExp(query, 'i') },
-                { full_name: new RegExp(query, 'i') },
-                { location: new RegExp(query, 'i') },
-            ]
-        }).select('-password');
-
-        const filteredUsers = users.filter(user => user._id.toString() !== userId);
-
-        // Search posts
-        const posts = await Post.find({
-            content: new RegExp(query, 'i')
-        }).populate('user', 'username full_name profile_picture').sort({ createdAt: -1 }).limit(20);
-
-        res.json({ success: true, users: filteredUsers, posts });
-    } catch (error) {
-        console.log(error);
-        res.json({ success: false, message: error.message });
-    }
-};
+export const searchUsers = handleUserSearch;
+export const globalSearch = handleUserSearch;

@@ -60,6 +60,9 @@ export const getFeedPosts = async (req, res) => {
         .lean();
     }
 
+    // Guard against orphaned posts whose user no longer exists.
+    posts = posts.filter((post) => post?.user);
+
     // Cache full posts so cached/non-cached responses have the same shape.
     const feedData = {
       user_id: userId,

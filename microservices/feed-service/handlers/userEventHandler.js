@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import { safeRedisDel } from '../configs/redis.js';
 
 export const handleUserEvent = async (eventType, payload) => {
+  const userPayload = payload?.user ?? payload?.data?.user ?? payload?.data ?? payload;
   const { followerId, followingId, userAId, userBId, requesterId, receiverId } = payload;
 
   const ensureUser = async (id) => {
@@ -38,8 +39,28 @@ export const handleUserEvent = async (eventType, payload) => {
     await ensureUser(receiverId);
   }
 
+  if ((eventType === 'user.created' || eventType === 'user.updated') && userPayload) {
+    const userId = userPayload.user_id ?? userPayload.id ?? userPayload._id;
+
+    if (userId) {
+      await User.findByIdAndUpdate(
+        userId,
+        {
+          $set: {
+            full_name: userPayload.full_name ?? userPayload.name ?? '',
+            username: userPayload.username ?? '',
+            profile_picture: userPayload.profile_picture ?? ''
+          },
+          $setOnInsert: { _id: userId }
+        },
+        { upsert: true, new: true }
+      );
+    }
+  }
+
   // Collect all affected user IDs
-  const affectedUserIds = [followerId, followingId, userAId, userBId, requesterId, receiverId].filter(Boolean);
+  const eventUserId = userPayload?.user_id ?? userPayload?.id ?? userPayload?._id;
+  const affectedUserIds = [followerId, followingId, userAId, userBId, requesterId, receiverId, eventUserId].filter(Boolean);
 
   if (affectedUserIds.length > 0) {
     // Invalidate feed caches for affected users so they refetch
