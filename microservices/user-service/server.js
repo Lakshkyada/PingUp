@@ -22,6 +22,11 @@ const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 app.use(cors({ origin: clientUrl, credentials: true }));
 app.use(express.json());
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // Inngest serve handler
 app.use("/api/inngest", serve({ client: inngest, functions }));
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import {BadgeCheck, MessageCircle, Share, Share2, Heart} from 'lucide-react'
 import moment from 'moment'
-import { dummyUserData } from '../assets/assets'
+import { assets, dummyUserData } from '../assets/assets'
 import { useNavigate } from 'react-router-dom'
 import {useSelector} from 'react-redux'
 import api from '../api/axios'
@@ -11,13 +11,13 @@ const PostCard = ({post}) => {
     const authorId = author?._id || ''
     const authorName = author?.full_name || 'Unknown user'
     const authorUsername = author?.username || 'unknown'
-    const authorAvatar = author?.profile_picture || 'https://via.placeholder.com/40?text=U'
+    const authorAvatar = author?.profile_picture || assets.sample_profile || dummyUserData.profile_picture
     const postContent = post?.content || ''
     const imageUrls = Array.isArray(post?.image_urls) ? post.image_urls : []
     const postWithHashtags = postContent.replace(/(#\w+)/g,'<span class="text-indigo-600">$1</span>')
-    const [likes, setLikes] = useState(Array.isArray(post?.likes_count) ? post.likes_count : [])
+    const [likes, setLikes] = useState(Array.isArray(post?.likes_count) ? post.likes_count.map(id => String(id)) : [])
     const currentUser = useSelector((state)=>state.user.value)
-    const currentUserId = currentUser?._id
+    const currentUserId = String(currentUser?._id || '')
     const handleLike = async ()=>{
           try {
               const {data} = await api.post('/api/post/like', {postId: post._id})

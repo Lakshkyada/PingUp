@@ -81,7 +81,23 @@ export const handlePostLikedEvent = async (payload) => {
     return;
   }
 
-  await safeRedisDel(`feed:${post.user.toString()}`);
+  // Invalidate caches for all users who might see this post
+  try {
+    const impactedUsers = await User.find({
+      $or: [
+        { _id: post.user.toString() }, // post author
+        { following: post.user.toString() }, // followers of author
+        { connections: post.user.toString() } // connections of author
+      ]
+    }).select('_id').lean();
+
+    const cachedIds = impactedUsers.map((u) => `feed:${u._id}`);
+    if (cachedIds.length > 0) {
+      await safeRedisDel(...cachedIds);
+    }
+  } catch (error) {
+    console.log('Could not invalidate feed caches for liked post:', error.message);
+  }
 };
 
 export const handlePostUnlikedEvent = async (payload) => {
@@ -101,5 +117,21 @@ export const handlePostUnlikedEvent = async (payload) => {
     return;
   }
 
-  await safeRedisDel(`feed:${post.user.toString()}`);
+  // Invalidate caches for all users who might see this post
+  try {
+    const impactedUsers = await User.find({
+      $or: [
+        { _id: post.user.toString() }, // post author
+        { following: post.user.toString() }, // followers of author
+        { connections: post.user.toString() } // connections of author
+      ]
+    }).select('_id').lean();
+
+    const cachedIds = impactedUsers.map((u) => `feed:${u._id}`);
+    if (cachedIds.length > 0) {
+      await safeRedisDel(...cachedIds);
+    }
+  } catch (error) {
+    console.log('Could not invalidate feed caches for unliked post:', error.message);
+  }
 };

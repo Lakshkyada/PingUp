@@ -50,14 +50,16 @@ export const getFeedPosts = async (req, res) => {
       .limit(FEED_LIMIT)
       .lean();
 
-    // If no posts found and user only follows themselves, return recent posts from everyone
-    if (posts.length === 0 && uniqueUserIds.length === 1) {
-      console.log('No personalized posts found, returning recent posts from all users');
-      posts = await Post.find({})
-        .populate('user', 'full_name username profile_picture')
-        .sort({ createdAt: -1 })
-        .limit(FEED_LIMIT)
-        .lean();
+    // If no posts found, return empty feed instead of showing everyone's posts
+    if (posts.length === 0) {
+      console.log('No posts found in user network');
+      // Cache empty feed
+      const feedData = {
+        user_id: userId,
+        feed: []
+      };
+      await safeRedisSet(cacheKey, JSON.stringify(feedData), { EX: 300 });
+      return res.json({ success: true, posts: [], cached: false });
     }
 
     // Guard against orphaned posts whose user no longer exists.

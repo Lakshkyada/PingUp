@@ -52,10 +52,17 @@ export const sseController = (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Access-Control-Allow-Origin', '*');
 
+    // Ensure the headers are flushed immediately for the stream.
+    res.flushHeaders?.();
+
     connections.set(userId, res);
-    res.write('log: Connected to SSE stream\n\n');
+
+    const keepAlive = setInterval(() => {
+        res.write(': keep-alive\n\n');
+    }, 20000);
 
     req.on('close', () => {
+        clearInterval(keepAlive);
         connections.delete(userId);
     });
 };
@@ -152,7 +159,17 @@ export const getUserRecentMessages = async (req, res) => {
             }
         }
 
-        const conversations = await hydrateMessages(Array.from(latestByPeerId.values()));
+        // Filter to only include conversations with unseen messages
+        const unseenConversations = Array.from(latestByPeerId.values()).filter(message => {
+            const fromId = String(message.from_user_id);
+            const toId = String(message.to_user_id);
+            const isFromCurrentUser = fromId === String(userId);
+            // If the message is from the current user, it's always "seen" from their perspective
+            // If the message is to the current user, check the seen flag
+            return isFromCurrentUser ? false : !message.seen;
+        });
+
+        const conversations = await hydrateMessages(unseenConversations);
         res.json({ success: true, conversations });
     } catch (error) {
         console.log(error);

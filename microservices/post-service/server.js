@@ -24,6 +24,11 @@ const mongoUri = process.env.POST_MONGO_URI || process.env.MONGO_URI;
 app.use(cors());
 app.use(express.json());
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // Inngest serve handler
 app.use("/api/inngest", serve({ client: inngest, functions }));
 

@@ -10,6 +10,21 @@ const RecentMessages = () => {
     const dispatch = useDispatch()
     const currentUser = useSelector((state)=>state.user.value)
     const [messages, setMessages] = useState([])
+
+    const getConversationPeer = (message) => {
+        if (message.from_user_id._id === currentUser?._id) {
+            return message.to_user_id
+        }
+        return message.from_user_id
+    }
+
+    const handleMessageClick = (peerId) => {
+        // Remove this conversation from local state immediately
+        setMessages(prev => prev.filter(message => {
+            const peer = getConversationPeer(message)
+            return peer._id !== peerId
+        }))
+    }
     const fetchRecentMessages = async ()=>{
          try {
              const {data} = await api.get('/api/user/recent-messages')
@@ -50,15 +65,16 @@ const RecentMessages = () => {
   return (
     <div className='space-y-2'>
         {           
-            messages.map((message,index)=>(
+            messages.map((message,index)=>{
+                const peer = getConversationPeer(message)
+                return (
                 <div key={index}>
                   
-                 <Link to={`messages/${message.from_user_id._id}`}  key={index} className='flex items-start gap-2 mb-3 py-2 hover:bg-slate-100'>
-                       {/* {console.log(message.from_user_id.profile_picture)} */}
-                       <img src={message.from_user_id.profile_picture} alt="" className='w-8 h-8 rounded-full'/>
+                 <Link to={`messages/${peer._id}`} onClick={() => handleMessageClick(peer._id)} className='flex items-start gap-2 mb-3 py-2 hover:bg-slate-100'>
+                       <img src={peer.profile_picture} alt="" className='w-8 h-8 rounded-full'/>
                        <div className='w-full'>
                             <div className='flex justify-between'>
-                                <p className='font-medium'>{message.from_user_id.full_name}</p>
+                                <p className='font-medium'>{peer.full_name}</p>
                                 <p className='text-[10px] text-slate-400'>{moment(message.createdAt).fromNow()}</p>
                             </div>
                             <div className='flex justify-between'>
@@ -71,7 +87,7 @@ const RecentMessages = () => {
                  </Link>
                
                  </div>
-            ))
+            )})
         }
     </div>
   )

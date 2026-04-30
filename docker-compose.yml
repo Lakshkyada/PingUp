@@ -1,0 +1,217 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+      - user-service
+      - post-service
+      - message-service
+      - search-service
+      - feed-service
+    networks:
+      - pingup-net
+
+  auth-service:
+    build:
+      context: ./microservices/auth-service
+    env_file:
+      - ./microservices/auth-service/.env
+    environment:
+      CLIENT_URL: ${PUBLIC_ORIGIN:-http://localhost}
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    expose:
+      - "3002"
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - pingup-net
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  user-service:
+    build:
+      context: ./microservices/user-service
+    env_file:
+      - ./microservices/user-service/.env
+    environment:
+      CLIENT_URL: ${PUBLIC_ORIGIN:-http://localhost}
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    expose:
+      - "3001"
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - pingup-net
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  post-service:
+    build:
+      context: ./microservices/post-service
+    env_file:
+      - ./microservices/post-service/.env
+    environment:
+      FRONTEND_URL: ${PUBLIC_ORIGIN:-http://localhost}
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    expose:
+      - "3003"
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - pingup-net
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3003/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  message-service:
+    build:
+      context: ./microservices/message-service
+    env_file:
+      - ./microservices/message-service/.env
+    environment:
+      FRONTEND_URL: ${PUBLIC_ORIGIN:-http://localhost}
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    expose:
+      - "3005"
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - pingup-net
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3005/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  search-service:
+    build:
+      context: ./microservices/search-service
+    env_file:
+      - ./microservices/search-service/.env
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    expose:
+      - "3004"
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - rabbitmq
+      - elasticsearch
+    networks:
+      - pingup-net
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3004/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  feed-service:
+    build:
+      context: ./microservices/feed-service
+    env_file:
+      - ./microservices/feed-service/.env
+    environment:
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    expose:
+      - "3006"
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - pingup-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    expose:
+      - "6379"
+    restart: unless-stopped
+    networks:
+      - pingup-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: unless-stopped
+    networks:
+      - pingup-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.enrollment.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+    networks:
+      - pingup-net
+
+networks:
+  pingup-net:
+    driver: bridge
+
+volumes:
+  redis-data:
+  rabbitmq-data:
+  elasticsearch-data:

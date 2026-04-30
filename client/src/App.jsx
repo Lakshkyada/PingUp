@@ -47,21 +47,32 @@ const App = () => {
 
   useEffect(()=>{
       if(currentUser){
-         const eventSource = new EventSource(import.meta.env.VITE_BASEURL + '/api/message/'+currentUser._id)
+         const baseUrl = import.meta.env.VITE_BASEURL?.trim() || window.location.origin;
+         const sseUrl = `${baseUrl.replace(/\/$/, '')}/api/messages/sse/${currentUser._id}`;
+         const eventSource = new EventSource(sseUrl);
+
+         eventSource.onopen = () => {
+           console.log('SSE connected to', sseUrl);
+         };
+
+         eventSource.onerror = (error) => {
+           console.error('SSE error:', error);
+         };
 
          eventSource.onmessage = (event)=>{
-           const message = JSON.parse(event.data)
-           if(pathnameRef.current === ('/messages/'+message.from_user_id._id)){
-              dispatch(addMessage(message))
+           const message = JSON.parse(event.data);
+           if(pathnameRef.current === (`/messages/${message.from_user_id._id}`)){
+              dispatch(addMessage(message));
            } else {
               toast.custom((t)=>(
                  <Notification t={t} message={message}/>
-              ), {position: 'bottom-right'})
+              ), {position: 'bottom-right'});
            }
-         }
+         };
+
          return ()=>{
-            eventSource.close()
-         }
+            eventSource.close();
+         };
       }
   }, [currentUser, dispatch])
   return (

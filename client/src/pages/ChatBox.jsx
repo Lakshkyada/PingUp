@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
  
 const ChatBox = () => {
   const {messages} = useSelector((state)=>state.messages)
+  const currentUser = useSelector((state)=>state.user.value)
   const {userId} = useParams()
   const dispatch = useDispatch()
   const [text, setText] = useState('')
@@ -40,7 +41,7 @@ const ChatBox = () => {
             media_url = uploaded.url
          }
 
-         const {data} = await api.post('/api/message/send', {
+         const {data} = await api.post('/api/messages/', {
             to_user_id: userId,
             text,
             media_url,
@@ -89,11 +90,8 @@ const ChatBox = () => {
              {
                 messages.toSorted((a,b)=> new Date(a.createdAt) - new Date(b.createdAt))
                 .map((message,index)=>(
-                    <div key={index} className={`flex flex-col ${message.to_user_id !==
-                     user._id ? 'items-start' : 'items-end' }`}>
-                       <div className={`p-2 text-sm max-w-sm bg-white text-slate-700 rounded-lg shadow ${message
-                        .to_user_id !== user._id ? 'rounded-bl-none' : 'rounded-br-none'
-                       }`}>
+                    <div key={index} className={`flex flex-col ${message.from_user_id._id === currentUser?._id ? 'items-end' : 'items-start' }`}>
+                       <div className={`p-2 text-sm max-w-sm bg-white text-slate-700 rounded-lg shadow ${message.from_user_id._id === currentUser?._id ? 'rounded-br-none' : 'rounded-bl-none' }`}>
                          {
                            message.message_type === 'image' && <img className='w-full max-w-sm rounded-lg mb-1' src={message.media_url} alt=''/>
                          }

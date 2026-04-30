@@ -1,4 +1,5 @@
 import Post from "../models/Post.js";
+import UserRelationship from "../models/UserRelationship.js";
 import imagekit from "../configs/imageKit.js";
 import { randomUUID } from 'crypto';
 import { connectRabbitMq, publishFeedEvent } from '../configs/rabbitmq.js';
@@ -183,6 +184,30 @@ export const getImageKitAuth = async (req, res) => {
 export const getPostsByUser = async (req, res) => {
   try {
     const userId = req.params.userId;
+    const requesterId = req.user.id;
+
+    // Allow viewing own posts
+    if (userId === requesterId) {
+      const posts = await Post.find({ user: userId })
+        .populate('user', 'full_name username profile_picture')
+        .sort({ createdAt: -1 });
+      return res.json({ success: true, posts });
+    }
+
+    // Check if requester is following or connected to the user
+    const relationship = await UserRelationship.findOne({ user_id: userId });
+    if (!relationship) {
+      return res.json({ success: true, posts: [] });
+    }
+
+    const isFollower = relationship.followers.some(id => id.toString() === requesterId);
+    const isConnection = relationship.connections.some(id => id.toString() === requesterId);
+
+    if (!isFollower && !isConnection) {
+      return res.json({ success: true, posts: [] });
+    }
+
+    // Requester can view the posts
     const posts = await Post.find({ user: userId })
       .populate('user', 'full_name username profile_picture')
       .sort({ createdAt: -1 });

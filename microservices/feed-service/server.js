@@ -10,11 +10,19 @@ import { initializeFeedConsumers } from './consumers/rabbitmqConsumer.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.FEED_SERVICE_PORT || 3006;
+const PORT = process.env.PORT || process.env.FEED_SERVICE_PORT || 3006;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'feed-service' });
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'feed-service' });
+});
 
 // Routes
 app.use('/api/feed', feedRoutes);

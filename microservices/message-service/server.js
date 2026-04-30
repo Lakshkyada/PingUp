@@ -28,6 +28,11 @@ if (!process.env.JWT_SECRET) {
   console.warn('Message Service: JWT_SECRET is missing; auth routes will return 401.');
 }
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // Inngest serve handler
 app.use("/api/inngest", serve({ client: inngest, functions }));
 
