@@ -1,0 +1,13 @@
+services:
+  auth-service:
+    image: ${DOCKERHUB_NAMESPACE:-yourdockerhubusername}/pingup-auth-service:${DOCKERHUB_TAG:-latest}
+  user-service:
+    image: ${DOCKERHUB_NAMESPACE:-yourdockerhubusername}/pingup-user-service:${DOCKERHUB_TAG:-latest}
+  post-service:
+    image: ${DOCKERHUB_NAMESPACE:-yourdockerhubusername}/pingup-post-service:${DOCKERHUB_TAG:-latest}
+  message-service:
+    image: ${DOCKERHUB_NAMESPACE:-yourdockerhubusername}/pingup-message-service:${DOCKERHUB_TAG:-latest}
+  search-service:
+    image: ${DOCKERHUB_NAMESPACE:-yourdockerhubusername}/pingup-search-service:${DOCKERHUB_TAG:-latest}
+  feed-service:
+    image: ${DOCKERHUB_NAMESPACE:-yourdockerhubusername}/pingup-feed-service:${DOCKERHUB_TAG:-latest}

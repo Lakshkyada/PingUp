@@ -9,7 +9,20 @@ import { startUserEventConsumer, stopUserEventConsumer } from './consumers/userE
 dotenv.config();
 
 const app = express();
-const PORT = process.env.SEARCH_SERVICE_PORT || 3004;
+const PORT = process.env.PORT || process.env.SEARCH_SERVICE_PORT || 3004;
+
+// Retry utility for cold start issues
+const retry = async (fn, retries = 18, delay = 10000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      console.log(`Search Service: Attempt ${i + 1} failed, retrying in ${delay}ms...`, err.message);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+};
 
 // Middleware
 app.use(cors());
@@ -52,17 +65,21 @@ const bootstrap = async () => {
   });
 
   try {
-    await ensureUsersIndex();
-    console.log('Search Service: Elasticsearch index ready');
+    await retry(async () => {
+      await ensureUsersIndex();
+      console.log('Search Service: Elasticsearch index ready');
+    });
   } catch (elasticError) {
-    console.error('Search Service: Elasticsearch initialization failed. Continuing with degraded search:', elasticError.message);
+    console.error('Search Service: Elasticsearch initialization failed after retries. Continuing with degraded search:', elasticError.message);
   }
 
   try {
-    await startUserEventConsumer();
-    console.log('Search Service: RabbitMQ consumer started');
+    await retry(async () => {
+      await startUserEventConsumer();
+      console.log('Search Service: RabbitMQ consumer started');
+    });
   } catch (rabbitError) {
-    console.error('Search Service: RabbitMQ consumer error. Continuing without live indexing:', rabbitError.message);
+    console.error('Search Service: RabbitMQ consumer error after retries. Continuing without live indexing:', rabbitError.message);
   }
 };
 

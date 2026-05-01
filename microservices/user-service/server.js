@@ -15,8 +15,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
-const PORT = process.env.USER_SERVICE_PORT || 3001;
+const PORT = process.env.PORT || process.env.USER_SERVICE_PORT || 3001;
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+
+// Retry utility for cold start issues
+const retry = async (fn, retries = 18, delay = 10000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      console.log(`User Service: Attempt ${i + 1} failed, retrying in ${delay}ms...`, err.message);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+};
 
 // Middleware
 app.use(cors({ origin: clientUrl, credentials: true }));
@@ -38,35 +51,43 @@ let server;
 
 const startServer = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('User Service: Connected to MongoDB');
+    await retry(async () => {
+      await mongoose.connect(process.env.MONGO_URI);
+      console.log('User Service: Connected to MongoDB');
+    });
 
     try {
-      await connectRedis();
-      console.log('User Service: Connected to Redis');
+      await retry(async () => {
+        await connectRedis();
+        console.log('User Service: Connected to Redis');
+      });
     } catch (redisError) {
-      console.error('User Service: Redis connection error. Continuing without cache:', redisError.message);
+      console.error('User Service: Redis connection error after retries. Continuing without cache:', redisError.message);
     }
 
     try {
-      await connectRabbitMq();
-      console.log('User Service: Connected to RabbitMQ');
+      await retry(async () => {
+        await connectRabbitMq();
+        console.log('User Service: Connected to RabbitMQ');
+      });
     } catch (rabbitError) {
-      console.error('User Service: RabbitMQ connection error. Continuing without event publishing:', rabbitError.message);
+      console.error('User Service: RabbitMQ connection error after retries. Continuing without event publishing:', rabbitError.message);
     }
 
     try {
-      await startUserEventConsumer();
-      console.log('User Service: User event consumer started');
+      await retry(async () => {
+        await startUserEventConsumer();
+        console.log('User Service: User event consumer started');
+      });
     } catch (consumerError) {
-      console.error('User Service: User event consumer error. Continuing without sync:', consumerError.message);
+      console.error('User Service: User event consumer error after retries. Continuing without sync:', consumerError.message);
     }
 
     server = app.listen(PORT, () => {
       console.log(`User Service running on port ${PORT}`);
     });
   } catch (err) {
-    console.error('User Service: Startup error:', err);
+    console.error('User Service: Startup error after retries:', err);
     process.exit(1);
   }
 };

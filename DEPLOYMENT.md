@@ -12,6 +12,88 @@ Deploy PingUp with the root Docker Compose stack. It builds the React client int
 - Valid ImageKit, SMTP, JWT, Redis, and RabbitMQ settings in each microservice `.env` file.
 - A public origin for the deployed app, such as `https://your-domain.com`.
 
+## Publish microservice images to Docker Hub
+
+1. Create `scripts/publish-dockerhub.sh` or `scripts/publish-dockerhub.ps1` (already included).
+2. Set your Docker Hub namespace and optional tag:
+
+```bash
+export DOCKERHUB_NAMESPACE=yourhubname
+export DOCKERHUB_TAG=latest
+```
+
+3. Log in to Docker Hub:
+
+```bash
+docker login
+```
+
+4. Build and push every microservice image:
+
+```bash
+./scripts/publish-dockerhub.sh
+```
+
+Or on Windows PowerShell:
+
+```powershell
+$env:DOCKERHUB_NAMESPACE = 'yourhubname'
+$env:DOCKERHUB_TAG = 'latest'
+.\scripts\publish-dockerhub.ps1
+```
+
+5. The pushed images will be tagged as:
+
+- `yourhubname/pingup-auth-service:latest`
+- `yourhubname/pingup-user-service:latest`
+- `yourhubname/pingup-post-service:latest`
+- `yourhubname/pingup-message-service:latest`
+- `yourhubname/pingup-search-service:latest`
+- `yourhubname/pingup-feed-service:latest`
+
+## Deploy using Docker Hub images
+
+If you want Compose to use those Hub images by name, run with the override file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.hub.yml up -d
+```
+
+## Deploy Frontend to Vercel
+
+1. In Vercel, create a new project and point the root directory to `client`.
+2. Use the existing `client/vercel.json` to rewrite routes to `index.html`.
+3. Set Vercel environment variables from `client/.env` if needed for the frontend build.
+4. Deploy with:
+
+```bash
+cd client
+vercel --prod
+```
+
+## Deploy Nginx to Render
+
+This repo now includes `render.yaml` for a Render Docker web service.
+It builds the root `Dockerfile`, serves the built React app, and routes API requests through Nginx.
+
+1. Create a new Render service from the repo, or connect the repo to Render.
+2. Render will detect `render.yaml` and create the `pingup-nginx` service.
+3. Set `PUBLIC_ORIGIN` to your browser-facing URL in the Render environment variables.
+
+If you prefer to push the image directly to Render's Docker registry, use:
+
+```powershell
+$renderRegistry = 'registry.render.com'
+$serviceName = 'pingup-nginx'
+$tag = 'latest'
+
+docker build -t "$renderRegistry/$serviceName:$tag" .
+
+docker login $renderRegistry
+
+docker push "$renderRegistry/$serviceName:$tag"
+```
+
 ## Steps
 
 1. Update the service `.env` files under `microservices/*-service/` with production values.

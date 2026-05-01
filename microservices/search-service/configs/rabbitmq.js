@@ -43,6 +43,7 @@ export const connectRabbitMq = async () => {
         });
 
         channel = await connection.createChannel();
+        console.log('Search Service: RabbitMQ connection established');
     }, 'Search Service');
 
     return { connection, channel };

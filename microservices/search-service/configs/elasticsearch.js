@@ -25,19 +25,28 @@ const userIndexMappings = {
 };
 
 export const ensureUsersIndex = async () => {
+    const elasticUrl = process.env.ELASTICSEARCH_URL || 'http://localhost:9200';
+    console.log(`Search Service: Connecting to Elasticsearch at ${elasticUrl}`);
+
+    await client.ping();
+    console.log('Search Service: Elasticsearch cluster reachable');
+
     const existsResponse = await client.indices.exists({ index: USER_INDEX });
     const exists = typeof existsResponse === 'boolean'
         ? existsResponse
         : existsResponse?.statusCode === 200;
 
     if (exists) {
+        console.log('Search Service: Elasticsearch index already exists');
         return;
     }
 
+    console.log('Search Service: Elasticsearch index not found, creating now');
     await client.indices.create({
         index: USER_INDEX,
         mappings: userIndexMappings,
     });
+    console.log('Search Service: Elasticsearch index created');
 };
 
 export const closeElasticsearchClient = async () => {
