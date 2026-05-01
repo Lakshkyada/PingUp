@@ -29,7 +29,7 @@ const App = () => {
   useEffect(()=>{
     const fetchData = async () => {
      try {
-       const { data } = await api.get('/api/user/data')
+       const { data } = await api.get('/api/users/me')
        if (data.success) {
          dispatch(fetchUser(data.user))
          dispatch(fetchConnections())

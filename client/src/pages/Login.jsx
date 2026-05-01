@@ -23,12 +23,17 @@ const Login = () => {
         if (data.token) {
           localStorage.setItem('token', data.token)
         }
-        const { data: userData } = await api.get('/api/user/data')
+        if (data.user) {
+          dispatch(fetchUser(data.user))
+        }
+        const { data: userData } = await api.get('/api/users/me')
         if (userData.success && userData.user) {
           dispatch(fetchUser(userData.user))
+          toast.success('Login successful')
+          navigate('/')
+        } else {
+          toast.error(userData.message || 'Unable to load user profile')
         }
-        toast.success('Login successful')
-        navigate('/')
       } else {
         toast.error(data.message)
       }

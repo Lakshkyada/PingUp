@@ -5,10 +5,10 @@ services:
     branch: main
     plan: starter
     region: oregon
-    dockerfilePath: Dockerfile
+    dockerfilePath: nginx/Dockerfile
     healthCheckPath: /health
     autoDeploy: true
     buildCommand: ''
     envVars:
       - key: PUBLIC_ORIGIN
-        value: 'https://your-domain.com'
+        value: 'https://pingup-nginx.onrender.com'
