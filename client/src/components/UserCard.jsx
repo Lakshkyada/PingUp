@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
 import { fetchUser } from '../features/user/userSlice'
+import { fetchConnections } from '../features/connections/connectionsSlice'
 
 const UserCard = ({ user }) => {
      const currentUser = useSelector((state) => state.user.value)
@@ -49,6 +50,7 @@ const UserCard = ({ user }) => {
                  toast.success(data.message)
                  setIsFollowing(!isFollowing)
                  await syncUserState()
+                 await dispatch(fetchConnections())
              } else {
                  toast.error(data.message)
              }
@@ -66,6 +68,7 @@ const UserCard = ({ user }) => {
              if (data.success) {
                  toast.success(data.message)
                  await syncUserState()
+                 await dispatch(fetchConnections())
              } else {
                  toast.error(data.message)
              }

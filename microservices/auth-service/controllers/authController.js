@@ -64,7 +64,7 @@ export const registerUser = async (req, res) => {
             full_name: full_name.trim()
         });
         await user.save();
-
+        
         await publishUserEvent('user.created', {
             user: {
                 user_id: user._id.toString(),

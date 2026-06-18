@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import searchRoutes from './routes/searchRoutes.js';
-import { ensureUsersIndex, closeElasticsearchClient } from './configs/elasticsearch.js';
+import client, { ensureUsersIndex, closeElasticsearchClient, USER_INDEX } from './configs/elasticsearch.js';
 import { closeRabbitMqConnection } from './configs/rabbitmq.js';
 import { startUserEventConsumer, stopUserEventConsumer } from './consumers/userEventConsumer.js';
 
@@ -31,6 +31,34 @@ app.use(express.json());
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+// Debug endpoint for internal search state
+app.get('/internal/search-debug', async (req, res) => {
+  try {
+    const existsResponse = await client.indices.exists({ index: USER_INDEX });
+    const exists = Boolean(existsResponse?.body ?? existsResponse);
+
+    let count = 0;
+    if (exists) {
+      const countResponse = await client.count({ index: USER_INDEX });
+      console.log('Count response:', JSON.stringify(countResponse).substring(0, 500));
+      count = countResponse?.count ?? countResponse?.body?.count ?? 0;
+    }
+
+    res.json({
+      index: USER_INDEX,
+      exists,
+      count,
+      elasticsearch_url: process.env.ELASTICSEARCH_URL || 'http://localhost:9200'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      index: USER_INDEX,
+      elasticsearch_url: process.env.ELASTICSEARCH_URL || 'http://localhost:9200'
+    });
+  }
 });
 
 // Routes
@@ -70,7 +98,10 @@ const bootstrap = async () => {
       console.log('Search Service: Elasticsearch index ready');
     });
   } catch (elasticError) {
-    console.error('Search Service: Elasticsearch initialization failed after retries. Continuing with degraded search:', elasticError.message);
+    console.error('Search Service: Elasticsearch initialization failed after retries:', elasticError.message);
+    console.error('Search Service: Full error stack:', elasticError.stack);
+    // Don't continue - index creation is critical
+    throw elasticError;
   }
 
   try {

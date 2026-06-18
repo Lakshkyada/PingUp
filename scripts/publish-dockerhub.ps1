@@ -22,7 +22,7 @@ $services = @(
 )
 
 foreach ($service in $services) {
-    $repo = "$DockerHubNamespace/pingup-$service:$DockerHubTag"
+    $repo = "$DockerHubNamespace/pingup-${service}:$DockerHubTag"
     $context = "./microservices/$service"
 
     Write-Host "`n=== Building $service => $repo ==="

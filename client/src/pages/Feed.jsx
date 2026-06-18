@@ -16,7 +16,7 @@ const Feed = () => {
   const fetchFeeds = async () => {
         try {
            setLoading(true)
-            const {data} = await api.get('/api/post/feed')
+           const {data} = await api.get('/api/post/feed')
            if(data.success){
               setFeeds(data.posts)
            } else {

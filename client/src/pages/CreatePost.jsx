@@ -8,7 +8,7 @@ import {  useNavigate } from 'react-router-dom'
 
 const CreatePost = () => {
 
-   const navigate = useNavigate()
+  const navigate = useNavigate()
   const [content, setContent] = useState('')
   const  [images, setImages] = useState([])
   const [loading, setLoading] = useState(false)

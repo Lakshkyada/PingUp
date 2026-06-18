@@ -3,7 +3,8 @@ import {
   USER_EVENTS_QUEUE,
   connectRabbitMq,
   getRabbitMqChannel,
-  closeRabbitMqConnection
+  closeRabbitMqConnection,
+  registerReconnectCallback
 } from '../configs/rabbitmq.js';
 import ProcessedEvent from '../models/ProcessedEvent.js';
 import { handlePostCreatedEvent, handlePostLikedEvent, handlePostUnlikedEvent } from '../handlers/postEventHandler.js';
@@ -68,9 +69,8 @@ const processMessage = async (queueName, msg, handler) => {
   }
 };
 
-export const initializeFeedConsumers = async () => {
-  await connectRabbitMq();
-  const channel = getRabbitMqChannel();
+const setupConsumers = async (channel) => {
+  console.log('Feed Service: Initializing consumer subscriptions...');
 
   await channel.consume(
     POST_EVENTS_QUEUE,
@@ -112,6 +112,13 @@ export const initializeFeedConsumers = async () => {
     },
     { noAck: false }
   );
+
+  console.log('Feed Service: Consumer subscriptions are active');
+};
+
+export const initializeFeedConsumers = async () => {
+  registerReconnectCallback(setupConsumers);
+  await connectRabbitMq();
 };
 
 export const getDlqStatus = async (req, res) => {

@@ -18,7 +18,7 @@ const router = express.Router();
 // Protected routes
 router.get('/me', auth, getUserData);
 router.put('/update', auth, updateUserData);
-router.post('/update', auth, updateUserData);
+// router.post('/update', auth, updateUserData);
 router.post('/follow', auth, followUser);
 router.post('/unfollow', auth, unfollowUser);
 router.post('/connect', auth, sendConnectionRequest);

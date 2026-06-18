@@ -12,85 +12,90 @@ const toUserResponse = (source = {}) => ({
 });
 
 const parseBooleanQuery = (value, defaultValue = false) => {
-    if (typeof value === 'boolean') {
-        return value;
-    }
+    if (typeof value === 'boolean') return value;
 
     if (typeof value === 'string') {
-        const normalized = value.trim().toLowerCase();
-        if (['1', 'true', 'yes', 'y'].includes(normalized)) {
-            return true;
-        }
-        if (['0', 'false', 'no', 'n'].includes(normalized)) {
-            return false;
-        }
+        const v = value.trim().toLowerCase();
+        if (['1','true','yes','y'].includes(v)) return true;
+        if (['0','false','no','n'].includes(v)) return false;
     }
 
     return defaultValue;
 };
 
 const searchUsersFromElastic = async (query, currentUserId, excludeCurrentUser = false) => {
-    const response = await client.search({
-        index: USER_INDEX,
-        size: 20,
-        query: {
-            bool: {
-                should: [
-                    {
-                        multi_match: {
-                            query,
-                            fields: SEARCH_FIELDS,
-                            fuzziness: 'AUTO',
-                            type: 'best_fields',
-                        },
+    try {
+        const response = await client.search({
+            index: USER_INDEX,
+            size: 10,
+            body: {
+                query: {
+                    bool: {
+                        should: [
+                            {
+                                multi_match: {
+                                    query,
+                                    fields: SEARCH_FIELDS,
+                                    fuzziness: 'AUTO',
+                                },
+                            },
+                            {
+                                multi_match: {
+                                    query,
+                                    fields: ['username^4', 'full_name^3'],
+                                    type: 'phrase_prefix',
+                                },
+                            },
+                        ],
                     },
-                    {
-                        multi_match: {
-                            query,
-                            fields: ['username^4', 'full_name^3', 'email^2'],
-                            type: 'phrase_prefix',
-                        },
-                    },
-                ],
-                minimum_should_match: 1,
+                },
             },
-        },
-    });
-    console.log('Elasticsearch response:', {
-        took: response?.took,
-        total: response?.hits?.total,
-        hitsCount: response?.hits?.hits?.length ?? response?.body?.hits?.hits?.length ?? 0,
-    });
-    const hits = response?.hits?.hits ?? response?.body?.hits?.hits ?? [];
+        });
 
-    const users = hits
-        .map((hit) => toUserResponse(hit?._source ?? hit?.source ?? {}));
+        const hits = response.hits?.hits ?? [];
 
-    if (!excludeCurrentUser || !currentUserId) {
+        console.log('Search result:', {
+            total: response.hits?.total?.value ?? 0,
+            hits: hits.length,
+        });
+
+        let users = hits.map(hit => toUserResponse(hit._source));
+
+        if (excludeCurrentUser && currentUserId) {
+            users = users.filter(u => u.user_id !== currentUserId);
+        }
+
         return users;
-    }
+    } catch (error) {
+        console.error('Elasticsearch search error:', error.message);
 
-    return users.filter((user) => user.user_id !== currentUserId);
+        if (error?.meta?.body?.error?.type === 'index_not_found_exception') {
+            return [];
+        }
+
+        throw error;
+    }
 };
 
-const handleUserSearch = async (req, res) => {
+export const searchUsers = async (req, res) => {
     try {
         const userId = req.user?.id;
         const { query, excludeSelf } = req.query;
-        const shouldExcludeSelf = parseBooleanQuery(excludeSelf, false);
-        console.log(`Search query: "${query}" from user ID: ${userId}`);
+
         if (!query || query.trim() === '') {
             return res.json({ success: true, users: [] });
         }
 
-        const users = await searchUsersFromElastic(query.trim(), userId, shouldExcludeSelf);
-        console.log(`Found ${users.length} users for query "${query}"`);    
+        const users = await searchUsersFromElastic(
+            query.trim(),
+            userId,
+            parseBooleanQuery(excludeSelf, false)
+        );
+
         res.json({ success: true, users });
     } catch (error) {
-        console.log(error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-export const searchUsers = handleUserSearch;
-export const globalSearch = handleUserSearch;
+export const globalSearch = searchUsers;

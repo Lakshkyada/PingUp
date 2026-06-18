@@ -242,7 +242,7 @@ export const followUser = async (req, res) => {
          if(user?.following?.map(f => f.toString()).includes(id)){
              return res.json({success: false, message: 'You are already following this user'})
          }
-
+         
          await Promise.all([
              User.updateOne({ _id: userId }, { $addToSet: { following: id } }),
              User.updateOne({ _id: id }, { $addToSet: { followers: userId } })
@@ -319,6 +319,9 @@ export const sendConnectionRequest = async (req, res) => {
                  from_user_id: userId,
                  to_user_id: id
             })
+
+            await safeRedisDel(`user:${userId}`, `user:${id}`)
+
               try {
                  await inngest.send({
                      name: 'app/connection-request',
@@ -403,6 +406,8 @@ export const acceptConnectionRequest = async (req, res) => {
             Connection.updateOne({ _id: connection._id }, { $set: { status: 'accepted' } })
         ]);
 
+        await safeRedisDel(`user:${userId}`, `user:${id}`)
+
         await publishUserEvent('connection.accepted', {
             userAId: userId,
             userBId: id,
@@ -432,6 +437,8 @@ export const rejectConnectionRequest = async (req, res) => {
         }
 
         await connection.deleteOne();
+
+        await safeRedisDel(`user:${userId}`, `user:${id}`)
 
         await publishUserEvent('connection.rejected', {
             requesterId: id,

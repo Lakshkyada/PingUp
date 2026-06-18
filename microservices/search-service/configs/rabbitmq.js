@@ -1,4 +1,7 @@
+import dotenv from 'dotenv';
 import amqp from 'amqplib';
+
+dotenv.config();
 
 const getRabbitUrl = () => process.env.RABBITMQ_URL || 'amqp://guest:guest@rabbitmq:5672';
 const MAX_RETRIES = 5;
