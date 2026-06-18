@@ -299,6 +299,10 @@ export const sendConnectionRequest = async (req, res) => {
         const userId = req.user.id;
         const {id} = req.body;
 
+        if (userId === id) {
+             return res.json({success: false, message: 'You cannot send a connection request to yourself'});
+        }
+
         // check if user has sent more than 20 req in last 24 hours
         const last24Hours = new Date(Date.now() - 24*60*60*1000)
         const connectionRequest = await Connection.find({from_user_id: userId, created_at: {$gt: last24Hours}})
@@ -393,6 +397,10 @@ export const acceptConnectionRequest = async (req, res) => {
     try{
         const userId = req.user.id;
         const {id} = req.body;
+
+        if (userId === id) {
+             return res.json({success: false, message: 'You cannot connect with yourself'});
+        }
         // console.log("id from body:", id)
         // console.log("logged in userId:", userId)
         const connection = await Connection.findOne({ from_user_id: id,to_user_id: userId})
